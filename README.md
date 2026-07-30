@@ -15,6 +15,52 @@ by real repository audits:
 - target responsibilities and reuse constraints to prevent parallel systems
 - explicit authorization boundaries for install, commit, push, and production
 
+## What changed in v2
+
+The v2 redesign was driven by a real Sub2API audit where inaccurate paths,
+missing Go build tags, zero-test false positives, and an immutable task list made
+safe continuation impossible. The new harness adds:
+
+- canonical states such as `ready`, `blocked`, `awaiting_review`, `passed`, and
+  `regressed`, with `passes` retained only as a compatibility projection
+- dependency gates, stable ownership targets, reuse fingerprints, and explicit
+  prohibitions against creating parallel schedulers, parsers, caches, services,
+  pages, or policy engines
+- argv-form verification plans bound to cwd, timeout, acceptance criteria,
+  required build-tag/feature/platform variants, and minimum discovered tests
+- immutable evidence records bound to source/workspace fingerprints, exact
+  verification plans, test counts, output digests, and execution identity
+- independent completion review that binds the exact evidence ID and rejects
+  stale revisions, unresolved findings, or reused actor/session identities
+- independently approved amendments with a global manifest revision chain,
+  task definition revisions, protected state fields, structured patches, and
+  canonical definition digests
+- strict path containment for targets, evidence, reviews, amendments, and check
+  working directories
+- explicit separation between local edits, dependency installation, commit,
+  push, and production authorization
+
+The validator includes adversarial regressions for forged check kinds or
+commands, zero and boolean test counts, incomplete variant matrices, stale source
+revisions, path traversal, unpassed dependencies, unrelated amendment patches,
+missing review metadata, and manifest revision jumps without amendments.
+
+## Task design guidance
+
+Before freezing a manifest, inventory the existing code owners and tests. Merge
+tasks only when they share one implementation primitive and one verification
+boundary. Split schema, enforcement, UI, rollout, and performance work when each
+can fail or roll back independently. Establish fixtures, toolchain checks,
+configuration defaults, and shared taxonomies before behavior that depends on
+them; schedule full regression and rollout documentation after the behavior is
+implemented.
+
+The Sub2API case study demonstrates the concrete decisions used in this release:
+combine generic request preflight with deterministic payload rules, combine
+rolling-health collection with shadow penalties, keep enforce-mode circuit
+breaking separate, split early test infrastructure from final regression, and
+split configuration defaults from UI and dangerous-combination validation.
+
 ## Layout
 
 - `SKILL.md`: Agent workflow and strict rules
