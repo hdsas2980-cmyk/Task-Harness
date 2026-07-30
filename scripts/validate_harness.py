@@ -22,6 +22,11 @@ VALID_ROLES = {
     "generated", "documentation",
 }
 VALID_KINDS = {"test", "lint", "typecheck", "build", "static", "manual", "benchmark", "fuzz"}
+DISCOVERY_POLICIES = {
+    "test": ("minimum_tests_discovered", "tests"),
+    "benchmark": ("minimum_benchmarks_discovered", "benchmarks"),
+    "fuzz": ("minimum_fuzz_targets_discovered", "fuzz_targets"),
+}
 REQUIRED_REVIEW_CHECKS = {
     "scope_matches", "criteria_covered", "tests_discovered_nonzero",
     "required_variants_covered", "no_parallel_system_created",
@@ -233,16 +238,20 @@ class Validation:
                         self.error("evidence_output", f"{ref} check {check_id} requires sha256 {digest_field}")
                 if not is_nonempty_string(check.get("output_excerpt")):
                     self.error("evidence_output", f"{ref} check {check_id} lacks output_excerpt")
-                if plan.get("kind") == "test":
-                    tests = check.get("tests")
-                    discovered = tests.get("discovered") if is_object(tests) else None
-                    minimum = plan.get("minimum_tests_discovered", 1)
+                discovery_policy = DISCOVERY_POLICIES.get(plan.get("kind"))
+                if discovery_policy:
+                    minimum_field, evidence_field = discovery_policy
+                    results = check.get(evidence_field)
+                    discovered = results.get("discovered") if is_object(results) else None
+                    minimum = plan.get(minimum_field, 1)
                     if type(discovered) is not int or discovered < minimum:
-                        self.error("zero_tests", f"{ref} check {check_id} discovered {discovered}; requires {minimum}")
-                    if not is_object(tests) or any(type(tests.get(name)) is not int or tests.get(name, -1) < 0 for name in ("discovered", "passed", "failed", "skipped")):
-                        self.error("test_counts", f"{ref} check {check_id} has invalid test counts")
-                    elif tests["discovered"] != tests["passed"] + tests["failed"] + tests["skipped"] or tests["failed"] != 0:
-                        self.error("test_counts", f"{ref} check {check_id} test counts are contradictory or failed")
+                        self.error("zero_discovery", f"{ref} check {check_id} discovered {discovered} {evidence_field}; requires {minimum}")
+                    if plan.get("kind") == "test":
+                        tests = results
+                        if not is_object(tests) or any(type(tests.get(name)) is not int or tests.get(name, -1) < 0 for name in ("discovered", "passed", "failed", "skipped")):
+                            self.error("test_counts", f"{ref} check {check_id} has invalid test counts")
+                        elif tests["discovered"] != tests["passed"] + tests["failed"] + tests["skipped"] or tests["failed"] != 0:
+                            self.error("test_counts", f"{ref} check {check_id} test counts are contradictory or failed")
             if required_keys != actual_keys:
                 self.error("variant_coverage", f"{ref} check {check_id} variants do not exactly cover the plan")
             if len(records) != len(actual_keys):
@@ -441,8 +450,12 @@ class Validation:
                 self.error("variants", f"{task_id}/{check_id} requires a non-empty variant matrix")
             elif len({variant_key(item) for item in variants}) != len(variants):
                 self.error("variants", f"{task_id}/{check_id} repeats a required variant")
-            if check.get("kind") == "test" and (not isinstance(check.get("minimum_tests_discovered"), int) or check.get("minimum_tests_discovered", 0) < 1):
-                self.error("zero_test_policy", f"{task_id}/{check_id} must require at least one test")
+            discovery_policy = DISCOVERY_POLICIES.get(check.get("kind"))
+            if discovery_policy:
+                minimum_field, _ = discovery_policy
+                minimum_value = check.get(minimum_field)
+                if type(minimum_value) is not int or minimum_value < 1:
+                    self.error("zero_discovery_policy", f"{task_id}/{check_id} must set {minimum_field} to at least one")
         missing_criteria = criterion_ids - covered
         if missing_criteria:
             self.error("criteria_uncovered", f"{task_id} criteria lack checks: {sorted(missing_criteria)}")
