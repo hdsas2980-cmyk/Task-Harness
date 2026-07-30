@@ -45,6 +45,39 @@ commands, zero and boolean test counts, incomplete variant matrices, stale sourc
 revisions, path traversal, unpassed dependencies, unrelated amendment patches,
 missing review metadata, and manifest revision jumps without amendments.
 
+The implementation was closed through two independent adversarial review rounds.
+The first review exposed plan/evidence substitution, incomplete variant coverage,
+path escape, stale source acceptance, declarative-only reviews, and unvalidated
+amendments. The second review found patch/result drift, unpassed dependencies,
+self-reported source fingerprints, boolean test-count coercion, timeout drift,
+and missing review metadata. Each reproduced bypass now has a negative regression
+test. The current suite contains 24 tests, the unrendered template passes strict
+validation with zero warnings, and the validator, shell initializer, and JSON
+templates are syntax checked.
+
+## Migration workflow
+
+For an existing legacy harness, do not edit a wrong immutable definition in
+place and then preserve a misleading green state. Use this sequence:
+
+1. Freeze the legacy manifest and record its source/workspace fingerprint.
+2. Audit actual code owners, paths, build tags, test names, toolchain versions,
+   dependencies, and authorization boundaries.
+3. Draft a v2 dependency graph. Merge only tasks sharing one implementation and
+   verification boundary; split schema, enforcement, UI, performance, and
+   rollout when they can fail or roll back independently.
+4. Run an independent specification review and close all findings.
+5. Install the v2 validator and control directories, then validate with
+   `--strict-paths` before implementation.
+6. Keep legacy completion values false unless current evidence proves them.
+   Future definition changes use approved amendments and invalidate stale
+   evidence.
+
+The Sub2API migration informed the recommended ordering: harness and toolchain,
+early fixtures and taxonomy, compatibility-first configuration, formula and UI,
+a shared preflight, capability-aware scheduling, rolling health and tuple-level
+circuits, retry/latency/queue governance, then full regression and rollout.
+
 ## Task design guidance
 
 Before freezing a manifest, inventory the existing code owners and tests. Merge
