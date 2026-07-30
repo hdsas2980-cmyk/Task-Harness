@@ -466,11 +466,56 @@ class Validation:
             self.error("blocked_reason", f"{task_id} is blocked without structured blocked_reason")
         self.validate_amendments(task)
 
+    def validate_migration_record(self) -> None:
+        raw = self.manifest.get("migration_record")
+        if raw is None:
+            return
+        path = self.safe_resolve(raw, "manifest migration_record", Path(".task-harness") / "amendments")
+        if path is None:
+            return
+        record = self.load_json(path, f"migration record {raw}")
+        if record is None:
+            return
+        for field in ("amendment_id", "task_id", "reason", "proposed_at"):
+            if not is_nonempty_string(record.get(field)):
+                self.error("migration_record", f"{raw} lacks {field}")
+        self.validate_identity(record.get("proposed_by"), f"{raw} proposer")
+        decision = record.get("decision")
+        if decision == "approved":
+            proposer = record.get("proposed_by", {})
+            approver = record.get("approved_by")
+            valid = self.validate_identity(approver, f"{raw} approver")
+            if not is_nonempty_string(record.get("approved_at")):
+                self.error("migration_record", f"{raw} approved record lacks approved_at")
+            if valid and (proposer.get("actor_id") == approver.get("actor_id") or proposer.get("session_id") == approver.get("session_id")):
+                self.error("migration_record", f"{raw} approval is not independent")
+        elif decision != "pending_review":
+            self.error("migration_record", f"{raw} has invalid decision {decision}")
+        migration = record.get("migration")
+        legacy = self.manifest.get("legacy_migration")
+        if not is_object(migration) or not is_object(legacy):
+            self.error("migration_record", f"{raw} and manifest require migration metadata")
+            return
+        expected = {
+            "legacy_snapshot": legacy.get("source_snapshot"),
+            "legacy_tasks": legacy.get("legacy_task_count"),
+            "legacy_passes_true": legacy.get("legacy_passes_true"),
+            "new_tasks": len(self.manifest.get("features", [])),
+        }
+        for field, value in expected.items():
+            if migration.get(field) != value:
+                self.error("migration_record", f"{raw} {field} does not match manifest migration")
+        if decision != "approved":
+            first = self.manifest.get("features", [{}])[0]
+            if first.get("status") not in {"ready", "blocked"} or first.get("passes") is not False:
+                self.error("migration_record", "pending migration must remain an unpassed first task")
+
     def validate(self) -> None:
         manifest = self.load_json(self.root / "feature_list.json", "feature_list.json")
         if manifest is None:
             return
         self.manifest = manifest
+        self.validate_migration_record()
         if manifest.get("schema_version") != "2.0":
             self.error("schema_version", "feature_list.json must use schema_version 2.0")
         if not isinstance(manifest.get("revision"), int) or manifest.get("revision", 0) < 1:

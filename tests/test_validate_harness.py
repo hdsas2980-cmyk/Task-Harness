@@ -170,7 +170,7 @@ class ValidatorTests(unittest.TestCase):
         forged = evidence(0, check={"kind": "lint", "command": ["different"], "criterion_ids": ["wrong"]})
         errors = self.errors(manifest, {manifest["features"][0]["evidence"][0]: forged})
         self.assertTrue(any("check_plan_mismatch" in item for item in errors))
-        self.assertTrue(any("zero_tests" in item for item in errors))
+        self.assertTrue(any("zero_discovery" in item for item in errors))
 
     def test_all_required_variants_must_be_covered(self):
         manifest = self.awaiting_manifest()
