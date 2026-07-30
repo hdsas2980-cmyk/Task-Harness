@@ -1,0 +1,60 @@
+========================================
+  {{project name}} progress log
+========================================
+
+Project boundary:
+  {{authorized local and remote scope}}
+
+----------------------------------------
+Session #0 - Harness initialization and independent audit
+----------------------------------------
+Time: {{ISO-8601}}
+
+Inventory:
+  - Existing task systems and plans: {{paths or none}}
+  - Existing implementation to extend: {{paths}}
+  - Parallel systems forbidden: {{responsibilities}}
+
+Independent audit:
+  - Reviewer/session: {{independent reviewer identity}}
+  - Findings: {{closed findings or blockers}}
+  - Manifest revision: 1
+
+Validation:
+  - Command: python .task-harness/scripts/validate_harness.py --root . --strict-paths
+  - Exit code: {{exit code}}
+  - Result: {{passed or blocked}}
+
+----------------------------------------
+Session #N - task-id: description
+----------------------------------------
+Time: {{ISO-8601}}
+Definition revision: {{N}}
+Source revision: {{commit or workspace fingerprint}}
+
+Work:
+  - Files: {{paths}}
+  - Change: {{behavioral summary}}
+  - Reuse decision: {{existing module extended}}
+
+Verification evidence:
+  - Evidence: .task-harness/evidence/{{task-id}}/{{attempt-id}}.json
+  - Commands: {{exact commands}}
+  - Exit codes: {{codes}}
+  - Tests discovered/passed: {{counts}}
+  - Variants/build tags: {{matrix}}
+  - Benchmarks/thresholds: {{results or not applicable}}
+
+Independent review:
+  - Review: .task-harness/reviews/{{task-id}}/{{review-id}}.json
+  - Decision: {{approved or rejected}}
+  - Findings closed: {{summary}}
+
+VCS and external actions:
+  - Commit: {{not requested or hash}}
+  - Push: {{not requested or verified remote/branch}}
+  - Production: not performed unless separately authorized
+
+Progress:
+  - Status: {{ready/in_progress/blocked/awaiting_review/passed/regressed}}
+  - Next eligible task: {{task-id or none}}
