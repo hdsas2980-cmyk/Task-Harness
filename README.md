@@ -46,6 +46,9 @@ powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 脚本幂等，可重复运行；每次把 `~/.claude/skills/task-harness/`
 （及 CC Switch 主库）覆盖为仓库当前版本。重装系统后即可一次性还原环境。
 
+重装系统或 Claude 被重置后的完整重建步骤（含前置检查、网络/鉴权注意、核验与冒烟测试），
+见 [SETUP.md](SETUP.md)——可整段贴给 Claude Code 让它逐步执行。
+
 ## 结构
 
 ```
