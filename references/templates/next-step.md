@@ -43,6 +43,24 @@ team 并行与 loop 均为**可选增强**，默认走单步、单任务、不�
 
 ---
 
+## D. 子 Agent 派发契约（防空转 · A 相 6 与 B 通用）
+
+子 Agent 收到的 prompt 就是它的任务本身。长叙事 + 大段内联数据 + 动作埋在末尾，会让它把整段当阅读材料、用寒暄开场（"你好，我是…"）而不执行。派发时严格遵守：
+
+1. **首行即命令（动词开头）**：第一行就是祈使动作（读取 X → 核查 Y → 只输出 Z），上下文放其后；绝不用背景铺垫开头。
+2. **硬输出契约收尾**：明确"只输出恰好一行 `HARNESS_REVIEW: pass|fail | <task-id> | <理由>`（评审）或状态块（实现），不要输出任何别的内容"。留了对话空间就会被寒暄填满。
+3. **数据外置**：不内联大段 artifacts；让子 Agent 用 read_file 自读 `.harness/artifacts/*` 与 `evidence.jsonl`。prompt 越短，指令越不被稀释。
+4. **显式角色**：传 `subagent_type`（如 general-purpose 或专门 reviewer），或首行声明身份"你是评审 Agent"。Agent 无独立 system 参数，角色靠 agentType 或首行注入。
+5. **兜底重试**：子 Agent 未回出契约行（`HARNESS_REVIEW:` / 状态块）即判为空转 → 用更短、更祈使的 prompt 重试一次；仍失败则主会话记录并回退串行，不伪造评审结论。
+6. **Workflow 场景最硬**：能用结构化输出 schema 时优先用，逼子 Agent 调 StructuredOutput，直接消除自由寒暄空间。
+
+评审派发骨架（照抄替换尖括号即可）：
+
+    你是评审 Agent。用 read_file 读 <artifact 路径>，独立核查以下 N 条：<核查清单>。
+    只输出恰好一行：HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>。不要输出任何别的内容。
+
+---
+
 ## C. loop 轮询（可选 · 默认关闭）
 
 默认到状态块即停。需要自动连推时，显式说明「进入 loop」再启用：

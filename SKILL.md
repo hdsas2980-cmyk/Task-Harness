@@ -64,6 +64,7 @@ pending → active → evidence_ready → passed
   HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
   ```
   harness 只解析这一行，按 pass/fail 更新状态并追加 reviews.jsonl。
+- 子 Agent 派发防空转：首行即命令、硬输出契约收尾、数据外置、显式 agentType、未回契约行即判空转重试一次。详见 `references/templates/next-step.md` 的「D. 子 Agent 派发契约」。
 
 ## 执行状态块（相 2 结尾输出，供循环判定）
 ```
