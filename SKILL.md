@@ -1,203 +1,84 @@
 ---
 name: task-harness
-description: Build and operate an auditable multi-session task harness with dependency-aware tasks, executable verification, evidence-bound completion, controlled amendments, and independent review. Use for large implementations, migrations, project planning, or repairing an existing feature_list.json harness.
-argument-hint: "[project name] [requirements or migration target]"
-disable-model-invocation: false
-user-invocable: true
+description: 长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，主会话上下文不随任务数增长。适用于需跨多次会话增量推进的大型工程。
 ---
 
-# Task Harness
+# task-harness v3
 
-Create a durable, auditable control plane for work that spans Agent sessions.
-The original four-file harness remains recognizable, but `passes` is only a
-compatibility projection. A task becomes passed only from current evidence and
-an independent review.
+## 哲学
+最小的骨架换最大的问责。一轮一任务（ralph）、存在性先于实现（ponytail）、完成由不可变证据加独立评审判定（gstack）。
+状态全部落盘，评审外包给独立上下文，主会话上下文恒定——与任务总数无关。
+宁可骨架简陋，不可问责缺失：绝不为"精简"砍掉验证、安全、错误处理。
 
-Read [references/methodology.md](references/methodology.md) before creating or
-migrating a harness. For a concrete merge/split and reuse analysis, read
-[references/examples/sub2api-migration.md](references/examples/sub2api-migration.md).
+## 核心不变式
+1. 一次会话只推进一个任务（选依赖已满足、优先级最高的 pending）。
+2. 只加载当前任务加它触及的代码；不回读全量任务清单，不回读旧证据。
+3. `passed` 必须同时持有一条 evidence 记录加一条 pass 评审记录，缺一不可。
+4. 实现者不等于评审者（评审经 skill 调用在独立上下文完成）。
+5. 依据不足时如实标 `blocked`，绝不伪造完成。
 
-## Workflow
-
-### 1. Establish authorization and repository boundaries
-
-Record the project root, source revision, working-tree state, target branch, and
-remote ownership. Treat local edits, dependency installation, commit, push, and
-production access as separate actions. This Skill never supplies authorization
-for any of them.
-
-### 2. Inventory before decomposition
-
-Search for existing task manifests, plans, issues, CI commands, package scripts,
-build tags/features, tests, generated code, and modules that already own the
-requested responsibilities. For every proposed task, record whether it will
-`reuse`, `extend_via_amendment`, `supersede`, or `create_with_justification`.
-Do not create a parallel scheduler, parser, cache, page, service, or policy
-engine when an established owner can be extended.
-
-### 3. Draft a dependency graph
-
-Use the v2 template at
-[references/templates/feature_list.json](references/templates/feature_list.json).
-Each feature must declare:
-
-- stable ID, priority, canonical `status`, and compatibility `passes`
-- definition revision and explicit `depends_on`
-- scoped targets with path, role, responsibility, and existence expectation
-- object-form steps and observable acceptance criteria
-- executable verification argv, cwd, timeout, criterion binding, variants, and
-  minimum discovered tests
-- reuse decision and explicit parallel implementations to forbid
-- references to evidence, reviews, and amendments
-
-Prefer one independently verifiable behavior per task. Merge tasks only when
-they share one implementation primitive and one verification boundary. Split a
-task when schema, behavior mode, UI, enforcement, or rollback can fail
-independently.
-
-### 4. Run an independent specification review
-
-Before freezing revision 1, use a different Agent/session to review:
-
-- paths and ownership responsibilities against the actual codebase
-- dependency order and cycles
-- executable commands, build tags/features, target test names, and nonzero test
-  discovery
-- hard assertions and numeric performance limits
-- overlap with existing implementation and other tasks
-- safety boundaries and rollback independence
-
-Close findings before implementation. Record the reviewer identity and decision
-in `progress.txt`. A reviewer cannot approve their own specification or task
-evidence.
-
-### 5. Generate the harness
-
-Keep these compatibility entry points in the project root:
-
-```text
-feature_list.json
-progress.txt
-init.sh
-task.json
-AGENTS.md
+## 5 态机
+```
+pending → active → evidence_ready → passed
+                        │              │
+                        └─(评审 fail)→ active（带新证据重试）
+   任意态 → blocked（结构化阻塞，记 reason）
+   passed → regressed（依赖变更导致失效，回 active）
 ```
 
-Create deterministic controls under `.task-harness/`:
+## 三相流程
 
-```text
-.task-harness/
-  amendments/
-  evidence/<task-id>/
-  reviews/<task-id>/
-  snapshots/
-  scripts/validate_harness.py
+### 相 1 · 设计（一次性）
+1. 对每个候选任务先过 ponytail 阶梯（见下），从源头砍掉伪任务。
+2. 起草 `tasks.json`：稳定 id、priority、一句话 desc、`depends_on`、可执行 `verify` 命令。
+3. 调 `gstack/plan-eng-review` 做规格独立评审（依赖环、路径归属、命令可执行性），结论追加 progress.txt。
+
+### 相 2 · 执行（每任务 fresh context）
+1. `bash init.sh` → 输出紧凑状态（进度计数加下一个 eligible 任务），不打印全量清单。
+2. 选唯一一个依赖已满足的最高优先级 `pending` → 置 `active`。
+3. 只读该任务加它触及的代码（ponytail：先读懂再动手），实现其范围。
+4. 跑 `verify` → 追加一条 `evidence.jsonl` → 置 `evidence_ready`。
+5. 结尾输出执行状态块（见下），供循环判定是否继续。
+
+### 相 3 · 评审（委托独立上下文）
+1. 对 `evidence_ready` 任务调 `gstack/review`，传证据 id 加变更范围。
+2. review 结尾按契约吐一行 `HARNESS_REVIEW:` → 追加 `reviews.jsonl`。
+3. `pass` → `passed`；`fail` → 回 `active` 带新一轮证据。
+
+## ponytail 阶梯（任务设计与实现时逐级自问）
+1. 这个任务/代码需要存在吗？（YAGNI）
+2. 代码库里已有可复用的吗？
+3. 标准库/语言原生能解决吗？
+4. 平台/框架原生能力能解决吗？
+5. 已装的依赖能解决吗？
+6. 一行能解决吗？
+7. 能跑通的最小实现是什么？
+（绝不对"理解代码"偷懒；绝不砍验证/安全/错误处理/无障碍。）
+
+## gstack 调用点与评审契约
+- 规格评审：`gstack/plan-eng-review`（相 1）。
+- 完成评审：`gstack/review`（相 3）。
+- 执行护栏（可选）：挂 `gstack/careful` hook 拦截误删/强推。
+- 评审结论契约（评审 skill 结尾必须输出恰好一行）：
+  ```
+  HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
+  ```
+  harness 只解析这一行，按 pass/fail 更新状态并追加 reviews.jsonl。
+
+## 执行状态块（相 2 结尾输出，供循环判定）
 ```
-
-Copy the validator from [scripts/validate_harness.py](scripts/validate_harness.py)
-and the templates from [references/templates/](references/templates/). Adapt
-commands and paths to the project; do not weaken the evidence fields.
-
-### 6. Validate before implementation
-
-Run:
-
-```sh
-python .task-harness/scripts/validate_harness.py --root . --strict-paths
-bash init.sh
+HARNESS_STATUS: <task-id> <IN_PROGRESS|COMPLETE|BLOCKED>
+PROGRESS: <passed>/<total>
+EXIT_SIGNAL: <false|true>
 ```
+所有任务 `passed` 时 EXIT_SIGNAL=true，循环结束。
 
-The manifest is blocked when a prerequisite, required path, dependency,
-verification command, build variant, acceptance mapping, or independent audit
-is unresolved. An exit code of zero is insufficient for test checks: the
-recorded discovered test count must meet the declared minimum.
+## 文件（放 `.harness/` 或项目根）
+- `tasks.json` — 任务清单，唯一真相源。
+- `evidence.jsonl` — 追加日志：`{id,task,cmd,exit,tests,rev,ts}`。
+- `reviews.jsonl` — 追加日志：`{id,task,ev,skill,verdict,ts}`。
+- `progress.txt` — 叙事日志，只读最后一条。
+- `init.sh` — 紧凑状态加单任务加载。
 
-### 7. Execute one eligible task
-
-Select the smallest-priority `ready` task whose dependencies are `passed`.
-Move it to `in_progress`, implement only its scope, and extend the existing
-owners recorded in `reuse`. If the definition is wrong, stop and use an
-amendment; do not silently edit it.
-
-### 8. Record immutable verification evidence
-
-Write one evidence record per attempt using
-[references/templates/.harness/evidence.json](references/templates/.harness/evidence.json).
-Evidence must bind the task definition revision and source revision and record
-exact argv, cwd, environment variant/build tags/features, timeout, exit code,
-test discovery counts, output digests/excerpts, and performance results.
-
-Rules:
-
-- test checks require at least one discovered test unless an approved explicit
-  non-test check applies
-- include all declared build tags, language features, configurations, and
-  platforms
-- concurrency changes require race/thread checks where supported
-- parser boundaries require bounded fuzz/property checks
-- hot paths require numeric benchmark limits, not subjective language
-- a changed definition or affected source revision makes old evidence stale
-
-After complete evidence, use `awaiting_review`; do not set `passed` directly.
-
-### 9. Require independent completion review
-
-A different actor/session reviews the exact evidence ID, changed scope,
-acceptance coverage, discovered tests, variants, performance limits, and reuse
-constraints. Store the result with
-[references/templates/.harness/review.json](references/templates/.harness/review.json).
-Only an approved current review allows `status: passed` and `passes: true`.
-Rejected review returns the task to work with a new attempt and review.
-
-### 10. Amend definitions without rewriting history
-
-Use [references/templates/.harness/amendment.json](references/templates/.harness/amendment.json).
-An amendment records base manifest/definition revisions, structured patch,
-reason, impact, proposer, independent approver, and applied revisions. Apply it
-only if the base revision still matches. Increment both revisions as applicable;
-mark old evidence stale. A passed task affected by the amendment becomes
-`regressed`, not silently green.
-
-Keep superseded tasks and their history. Never delete a task to hide a merge,
-split, correction, or regression.
-
-## Canonical states
-
-```text
-proposed -> ready -> in_progress -> awaiting_review -> passed
-                         |               |
-                         v               v
-                      blocked      review_rejected
-                         |
-                         v
-                verification_failed
-
-passed -> regressed -> in_progress | blocked | awaiting_review
-any nonterminal -> superseded | cancelled
-```
-
-`passes` must always equal `(status == "passed")`.
-
-## Per-session order
-
-1. Run `bash init.sh`; read `progress.txt` and the manifest.
-2. Verify repository, toolchain, dependency, and authorization boundaries.
-3. Select one dependency-eligible task.
-4. Implement only its scope and reuse existing modules.
-5. Run every declared check and create evidence.
-6. Obtain independent review of that evidence.
-7. Derive status and compatibility `passes` together.
-8. Append the session log.
-9. Commit or push only when currently authorized and after verifying the target.
-
-## Strict rules
-
-- Task definitions change only through approved, revisioned amendments.
-- No task passes without current evidence and independent approval.
-- Zero discovered tests fail a test check.
-- Build tags/features/configurations are part of verification, not optional notes.
-- Blockers are structured state, not prose that can be ignored.
-- Regressions invalidate green status.
-- `progress.txt` explains history but never overrides machine state.
-- `task.json` contains project policy; milestone status is derived from tasks.
-- Do not force install, commit, push, or production actions.
+## 修订（不走重型 amendment 流程）
+改任务定义 = 直接编辑 tasks.json 加顶层 `rev+1` 加 progress.txt 记一句；受影响的 `passed` 任务标 `regressed` 回 active。

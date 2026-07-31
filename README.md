@@ -1,121 +1,77 @@
-# Task Harness
+# Task Harness v3
 
-An auditable long-running Agent Skill derived from the original
-`kangarooking/task-harness` workflow.
+长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，
+主会话上下文不随任务数增长。适用于需跨多次会话增量推进的大型工程。
 
-Version 2 keeps the familiar root files while fixing the failure modes exposed
-by real repository audits:
+## 哲学
 
-- revisioned, independently approved task amendments
-- dependency-aware canonical task states with legacy `passes` projection
-- executable verification and nonzero test discovery
-- build tag/feature/platform matrices
-- evidence-bound completion and independent second review
-- structured blockers and regressions
-- target responsibilities and reuse constraints to prevent parallel systems
-- explicit authorization boundaries for install, commit, push, and production
+最小的骨架换最大的问责：
 
-## What changed in v2
+- **一轮一任务**（参考 ralph）——每个任务在 fresh context 里推进，只加载单任务，
+  执行结尾输出 `EXIT_SIGNAL` 状态块供外部循环判定。
+- **存在性先于实现**（参考 ponytail）——7 级懒惰阶梯已内联进 `SKILL.md`，
+  从源头砍掉伪任务；绝不为精简砍掉验证、安全、错误处理。
+- **证据加独立评审判定完成**（参考 gstack）——`passed` 必须同时持有一条 evidence
+  记录加一条 pass 评审记录；评审经 skill 调用在独立上下文完成，实现者不等于评审者。
 
-The v2 redesign was driven by a real Sub2API audit where inaccurate paths,
-missing Go build tags, zero-test false positives, and an immutable task list made
-safe continuation impossible. The new harness adds:
+三处"外包"（ralph 范式、ponytail 阶梯、gstack 评审契约）都以文字协议内联，
+核心（`SKILL.md` 加 5 个模板）完全自包含，无外部代码依赖。
 
-- canonical states such as `ready`, `blocked`, `awaiting_review`, `passed`, and
-  `regressed`, with `passes` retained only as a compatibility projection
-- dependency gates, stable ownership targets, reuse fingerprints, and explicit
-  prohibitions against creating parallel schedulers, parsers, caches, services,
-  pages, or policy engines
-- argv-form verification plans bound to cwd, timeout, acceptance criteria,
-  required build-tag/feature/platform variants, and minimum discovered tests
-- immutable evidence records bound to source/workspace fingerprints, exact
-  verification plans, test counts, output digests, and execution identity
-- independent completion review that binds the exact evidence ID and rejects
-  stale revisions, unresolved findings, or reused actor/session identities
-- independently approved amendments with a global manifest revision chain,
-  task definition revisions, protected state fields, structured patches, and
-  canonical definition digests
-- strict path containment for targets, evidence, reviews, amendments, and check
-  working directories
-- explicit separation between local edits, dependency installation, commit,
-  push, and production authorization
+## v3 相对 v2 的变化
 
-The validator includes adversarial regressions for forged check kinds or
-commands, zero and boolean test counts, incomplete variant matrices, stale source
-revisions, path traversal, unpassed dependencies, unrelated amendment patches,
-missing review metadata, and manifest revision jumps without amendments.
+v2 引入了 9 状态机、amendment 修订流程、`.harness/*.json` 三模板与 590 行
+`validate_harness.py`。v3 判断这些是过度工程且会增加上下文负担，改为：
 
-The implementation was closed through two independent adversarial review rounds.
-The first review exposed plan/evidence substitution, incomplete variant coverage,
-path escape, stale source acceptance, declarative-only reviews, and unvalidated
-amendments. The second review found patch/result drift, unpassed dependencies,
-self-reported source fingerprints, boolean test-count coercion, timeout drift,
-and missing review metadata. Each reproduced bypass now has a negative regression
-test. The current suite contains 24 tests, the unrendered template passes strict
-validation with zero warnings, and the validator, shell initializer, and JSON
-templates are syntax checked.
+- 5 状态机：`pending → active → evidence_ready → passed`，外加 `blocked` / `regressed`
+- 追加式 JSONL 日志（`evidence.jsonl` / `reviews.jsonl`）取代目录树式 JSON 模板
+- 评审委托给 skill，主会话只回收一行 `HARNESS_REVIEW:` 契约结论
+- 移除 `validate_harness.py` 与 v1 遗留的 `feature_list.json` / `task.json`
 
-## Migration workflow
+## 一次性安装
 
-For an existing legacy harness, do not edit a wrong immutable definition in
-place and then preserve a misleading green state. Use this sequence:
-
-1. Freeze the legacy manifest and record its source/workspace fingerprint.
-2. Audit actual code owners, paths, build tags, test names, toolchain versions,
-   dependencies, and authorization boundaries.
-3. Draft a v2 dependency graph. Merge only tasks sharing one implementation and
-   verification boundary; split schema, enforcement, UI, performance, and
-   rollout when they can fail or roll back independently.
-4. Run an independent specification review and close all findings.
-5. Install the v2 validator and control directories, then validate with
-   `--strict-paths` before implementation.
-6. Keep legacy completion values false unless current evidence proves them.
-   Future definition changes use approved amendments and invalidate stale
-   evidence.
-
-The Sub2API migration informed the recommended ordering: harness and toolchain,
-early fixtures and taxonomy, compatibility-first configuration, formula and UI,
-a shared preflight, capability-aware scheduling, rolling health and tuple-level
-circuits, retry/latency/queue governance, then full regression and rollout.
-
-## Task design guidance
-
-Before freezing a manifest, inventory the existing code owners and tests. Merge
-tasks only when they share one implementation primitive and one verification
-boundary. Split schema, enforcement, UI, rollout, and performance work when each
-can fail or roll back independently. Establish fixtures, toolchain checks,
-configuration defaults, and shared taxonomies before behavior that depends on
-them; schedule full regression and rollout documentation after the behavior is
-implemented.
-
-The Sub2API case study demonstrates the concrete decisions used in this release:
-combine generic request preflight with deterministic payload rules, combine
-rolling-health collection with shadow penalties, keep enforce-mode circuit
-breaking separate, split early test infrastructure from final regression, and
-split configuration defaults from UI and dangerous-combination validation.
-
-## Layout
-
-- `SKILL.md`: Agent workflow and strict rules
-- `references/methodology.md`: design rationale and migration guidance
-- `references/templates/`: v2 manifest, evidence, review, amendment, task, log,
-  and initializer templates
-- `references/examples/sub2api-migration.md`: real read-only migration case study
-- `scripts/validate_harness.py`: dependency, path, criteria, evidence, review,
-  and zero-test validator
-- `tests/test_validate_harness.py`: validator regression tests
-
-## Validate
+克隆后一条命令部署到 Claude Code；若检测到 CC Switch 主库会一并同步
+（CC Switch 是 auto 同步权威源，不同步会被回滚）。
 
 ```sh
-python -m unittest discover -s tests -v
-python scripts/validate_harness.py --root references/templates
+git clone https://github.com/hdsas2980-cmyk/Task-Harness.git
+cd Task-Harness
+
+# Linux / macOS / Windows-bash
+bash scripts/install.sh
+
+# 或 Windows PowerShell
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
-Template targets are non-required placeholders so the unrendered template is
-self-validating. A generated project must replace them with real paths, set
-`required: true`, and validate with `--strict-paths`.
+脚本幂等，可重复运行；每次把 `~/.claude/skills/task-harness/`
+（及 CC Switch 主库）覆盖为仓库当前版本。重装系统后即可一次性还原环境。
+
+## 结构
+
+```
+SKILL.md                     技能主入口：哲学 / 5 态机 / 三相流程 / ponytail 阶梯 / gstack 调用点
+references/methodology.md    方法论背景与设计问答
+references/templates/        项目初始化模板
+  tasks.json                 任务清单，唯一真相源
+  evidence.jsonl             追加日志：verify 证据
+  reviews.jsonl             追加日志：评审结论
+  progress.txt               叙事日志，只读最后一条
+  init.sh                    紧凑状态加单任务加载（自动探测 python，utf-8 输出）
+scripts/install.sh           一次性安装（bash）
+scripts/install.ps1          一次性安装（PowerShell）
+```
+
+## 使用
+
+在目标项目里进入相 1 设计：复制 `references/templates/` 下模板，
+过 ponytail 阶梯砍掉伪任务，起草 `tasks.json`，调 `gstack/plan-eng-review`
+做规格评审。之后每轮 `bash init.sh` 取下一个任务，执行、记证据、调
+`gstack/review` 评审，直至 `EXIT_SIGNAL: true`。详见 `SKILL.md`。
+
+## 参考
+
+- [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
 
 ## License
 
-MIT-0, matching the referenced original Skill.
+见 [LICENSE](LICENSE)。

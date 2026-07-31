@@ -1,0 +1,24 @@
+{
+  "project": "{{项目名称}}",
+  "description": "{{一句话目标与范围}}",
+  "rev": 1,
+  "methodology": "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents",
+  "tasks": [
+    {
+      "id": "t-01",
+      "priority": 1,
+      "desc": "第一个任务的一句话描述",
+      "depends_on": [],
+      "verify": "可执行的验证命令，例如 go test ./... 或 npm test -- x.test.ts",
+      "status": "pending"
+    },
+    {
+      "id": "t-02",
+      "priority": 2,
+      "desc": "第二个任务的一句话描述",
+      "depends_on": ["t-01"],
+      "verify": "可执行的验证命令",
+      "status": "pending"
+    }
+  ]
+}

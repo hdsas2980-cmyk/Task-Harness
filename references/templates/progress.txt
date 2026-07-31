@@ -1,60 +1,24 @@
 ========================================
-  {{project name}} progress log
+  {{项目名称}} 进度日志 (task-harness v3)
 ========================================
+目标: {{一句话目标与范围}}
+技术栈: {{主要技术栈}}
 
-Project boundary:
-  {{authorized local and remote scope}}
-
-----------------------------------------
-Session #0 - Harness initialization and independent audit
-----------------------------------------
-Time: {{ISO-8601}}
-
-Inventory:
-  - Existing task systems and plans: {{paths or none}}
-  - Existing implementation to extend: {{paths}}
-  - Parallel systems forbidden: {{responsibilities}}
-
-Independent audit:
-  - Reviewer/session: {{independent reviewer identity}}
-  - Findings: {{closed findings or blockers}}
-  - Manifest revision: 1
-
-Validation:
-  - Command: python .task-harness/scripts/validate_harness.py --root . --strict-paths
-  - Exit code: {{exit code}}
-  - Result: {{passed or blocked}}
+规则: 只读最后一条即可掌握进度。每轮追加一段，不改写历史。
 
 ----------------------------------------
-Session #N - task-id: description
+{{YYYY-MM-DD}} · 相 1 设计
 ----------------------------------------
-Time: {{ISO-8601}}
-Definition revision: {{N}}
-Source revision: {{commit or workspace fingerprint}}
+- 起草 tasks.json（N 个任务），已过 ponytail 阶梯。
+- plan-eng-review 结论: {{通过/需调整，一句话}}
+- 下一步: 按依赖与优先级进入相 2 执行。
 
-Work:
-  - Files: {{paths}}
-  - Change: {{behavioral summary}}
-  - Reuse decision: {{existing module extended}}
-
-Verification evidence:
-  - Evidence: .task-harness/evidence/{{task-id}}/{{attempt-id}}.json
-  - Commands: {{exact commands}}
-  - Exit codes: {{codes}}
-  - Tests discovered/passed: {{counts}}
-  - Variants/build tags: {{matrix}}
-  - Benchmarks/thresholds: {{results or not applicable}}
-
-Independent review:
-  - Review: .task-harness/reviews/{{task-id}}/{{review-id}}.json
-  - Decision: {{approved or rejected}}
-  - Findings closed: {{summary}}
-
-VCS and external actions:
-  - Commit: {{not requested or hash}}
-  - Push: {{not requested or verified remote/branch}}
-  - Production: not performed unless separately authorized
-
-Progress:
-  - Status: {{ready/in_progress/blocked/awaiting_review/passed/regressed}}
-  - Next eligible task: {{task-id or none}}
+----------------------------------------
+（后续每轮追加，格式如下）
+----------------------------------------
+{{YYYY-MM-DD}} · <task-id> <执行/评审>
+- 做了什么 / 触及文件
+- evidence: <evidence.jsonl 行 id>
+- review: HARNESS_REVIEW: pass|fail | <task-id> | <理由>
+- 状态: <passed/回 active 重试/blocked>
+- PROGRESS: <passed>/<total>
