@@ -79,6 +79,7 @@ EXIT_SIGNAL: <false|true>
 - `reviews.jsonl` — 追加日志：`{id,task,ev,skill,verdict,ts}`。
 - `progress.txt` — 叙事日志，只读最后一条。
 - `init.sh` — 紧凑状态加单任务加载。
+- `next-step.md` — 推进提示词模板（A 单步默认 / B team 并行可选 / C loop 可选）。
 
 ## 修订（不走重型 amendment 流程）
 改任务定义 = 直接编辑 tasks.json 加顶层 `rev+1` 加 progress.txt 记一句；受影响的 `passed` 任务标 `regressed` 回 active。
