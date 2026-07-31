@@ -32,6 +32,14 @@ else
   echo "  [跳过] 未检测到 CC Switch ($CC_SWITCH_DIR); 仅装到 Claude Code。"
 fi
 
+# 3. 斜杠命令 (只装到 Claude Code 命令目录)
+CMD_DIR="$CLAUDE_DIR/commands"
+mkdir -p "$CMD_DIR"
+if [ -d "$REPO_DIR/commands" ]; then
+  cp "$REPO_DIR/commands/"task-harness-next-*.md "$CMD_DIR/"
+  echo "  [OK] 斜杠命令 -> $CMD_DIR (/task-harness-next-a|b|c)"
+fi
+
 echo ""
 echo "完成。校验 SKILL.md:"
 head -1 "$CLAUDE_DIR/skills/task-harness/SKILL.md" >/dev/null && echo "  Claude: $(wc -l < "$CLAUDE_DIR/skills/task-harness/SKILL.md") 行"

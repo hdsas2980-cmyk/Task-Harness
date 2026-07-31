@@ -30,6 +30,15 @@ if (Test-Path $CcSwitch) {
   Write-Host "  [跳过] 未检测到 CC Switch ($CcSwitch); 仅装到 Claude Code。"
 }
 
+# 3. 斜杠命令 (只装到 Claude Code 命令目录)
+$CmdDir = Join-Path $ClaudeDir "commands"
+New-Item -ItemType Directory -Force -Path $CmdDir | Out-Null
+$CmdSrc = Join-Path $RepoDir "commands"
+if (Test-Path $CmdSrc) {
+  Copy-Item (Join-Path $CmdSrc "task-harness-next-*.md") $CmdDir -Force
+  Write-Host "  [OK] 斜杠命令 -> $CmdDir (/task-harness-next-a|b|c)"
+}
+
 $skill = Join-Path $ClaudeDir "skills\task-harness\SKILL.md"
 Write-Host ""
 Write-Host "完成。Claude SKILL.md 行数: $((Get-Content $skill).Count)"
