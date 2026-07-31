@@ -60,16 +60,65 @@ references/templates/        项目初始化模板
   reviews.jsonl             追加日志：评审结论
   progress.txt               叙事日志，只读最后一条
   init.sh                    紧凑状态加单任务加载（自动探测 python，utf-8 输出）
+  next-step.md               推进提示词模板（A 单步 / B team 并行 / C loop）
+commands/                    斜杠命令（安装后可 /task-harness-next-a|b|c 调用）
 scripts/install.sh           一次性安装（bash）
 scripts/install.ps1          一次性安装（PowerShell）
 ```
 
 ## 使用
 
-在目标项目里进入相 1 设计：复制 `references/templates/` 下模板，
-过 ponytail 阶梯砍掉伪任务，起草 `tasks.json`，调 `gstack/plan-eng-review`
-做规格评审。之后每轮 `bash init.sh` 取下一个任务，执行、记证据、调
-`gstack/review` 评审，直至 `EXIT_SIGNAL: true`。详见 `SKILL.md`。
+### 相 1 · 设计（一次性）
+
+在目标项目里把 `references/templates/` 下模板复制到 `.harness/`，过 ponytail
+阶梯砍掉伪任务，起草 `tasks.json`（稳定 id、priority、一句话 desc、`depends_on`、
+可执行 `verify`），再调 `gstack/plan-eng-review` 做规格独立评审，结论追加 `progress.txt`。
+
+`tasks.json` 结构：
+
+```json
+{
+  "project": "示例",
+  "rev": 1,
+  "tasks": [
+    { "id": "t-01", "priority": 1, "desc": "一句话说清范围",
+      "depends_on": [], "verify": "go test ./...", "status": "pending" }
+  ]
+}
+```
+
+### 相 2/3 · 推进（每轮一任务）
+
+每轮 `bash .harness/init.sh` 取下一个 eligible 任务，执行、记 `evidence.jsonl`、
+调 `gstack/review` 评审、按 `HARNESS_REVIEW:` 一行契约更新 `status` 并记
+`reviews.jsonl`，直至 `EXIT_SIGNAL: true`。
+
+### 斜杠命令
+
+安装脚本会把三个推进命令装到 `~/.claude/commands/`，直接在 Claude Code 里调用：
+
+| 命令 | 模式 | 行为 |
+| --- | --- | --- |
+| `/task-harness-next-a` | 单步（默认） | 只推进一个任务，拿到状态块即停，不自转 |
+| `/task-harness-next-b` | team 并行（可选） | 仅对依赖互不相关、改动文件不重叠的任务分派子 Agent，各自独立评审 |
+| `/task-harness-next-c` | loop 连推（可选） | 每轮 fresh context，遇 `EXIT_SIGNAL:true`/BLOCKED/同任务连续两轮 fail 即停 |
+
+三命令自包含（内联完整流程，不依赖外部文件），末尾支持追加临时指令（如指定任务 id）。
+默认单步单任务；team 并行与 loop 都必须显式调用对应命令才生效——这是为守住
+「上下文不随任务数增长」的核心宗旨。等价的可复制提示词见
+`references/templates/next-step.md`。详见 `SKILL.md`。
+
+### 状态机
+
+```
+pending → active → evidence_ready → passed
+                        │              │
+                        └─(评审 fail)→ active（带新证据重试）
+   任意态 → blocked（结构化阻塞，记 reason）
+   passed → regressed（依赖变更导致失效，回 active）
+```
+
+`passed` 必须同时持有一条 evidence 记录加一条 pass 评审记录，缺一不可；实现者不评审自己。
 
 ## 参考
 
