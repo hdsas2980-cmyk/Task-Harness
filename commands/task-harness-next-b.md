@@ -1,5 +1,5 @@
 ---
-description: task-harness v3 推进 · B team 并行（可选，仅独立任务）
+description: task-harness v3.1 推进 · B team 并行（可选，仅独立任务）
 ---
 
 按 task-harness v3 以 team 并行推进本轮。仅当存在多个「依赖互不相关」的 eligible pending 任务时启用，否则退回单步串行（见 /task-harness-next-a）。

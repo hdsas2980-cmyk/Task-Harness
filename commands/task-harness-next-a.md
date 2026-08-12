@@ -1,5 +1,5 @@
 ---
-description: task-harness v3 推进 · A 单步（默认，不进 loop）
+description: task-harness v3.1 推进 · A 单步（默认，不进 loop）
 ---
 
 按 task-harness v3 单步推进一轮。只推进一个任务，禁止回读全量清单与旧证据，保持主会话上下文恒定。

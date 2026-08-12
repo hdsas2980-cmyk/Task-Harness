@@ -1,5 +1,5 @@
 ---
-description: task-harness v3 推进 · C loop 连推（可选，显式确认）
+description: task-harness v3.1 推进 · C loop 连推（可选，显式确认）
 ---
 
 按 task-harness v3 进入 loop 连续推进。这是**可选**模式，本命令即视为显式开启。
