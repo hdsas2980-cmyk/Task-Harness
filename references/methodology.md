@@ -93,7 +93,7 @@ infra-01             # 基础设施类
 
 ### 2. 依赖（depends_on）
 
-v3 用 `depends_on` 表达任务间关系，取代 v1 的 `category` 标签。`init.sh` 据此只挑"依赖已 passed"的任务作为下一个 eligible，自动形成正确执行顺序；`plan-eng-review` 负责校验依赖图无环。写清依赖比按代码层级贴标签更能约束执行顺序。
+v3 用 `depends_on` 表达任务间关系，取代 v1 的 `category` 标签。`init.sh` 据此只挑"依赖已 passed"的任务作为下一个 eligible，自动形成正确执行顺序；相 1 的规格评审（`references/review/spec-review.md`）负责校验依赖图无环。写清依赖比按代码层级贴标签更能约束执行顺序。
 
 ```
 "depends_on": []            # 无前置，可立即执行

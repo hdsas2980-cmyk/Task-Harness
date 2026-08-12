@@ -31,7 +31,7 @@ print(f"PROGRESS: {len(passed)}/{len(tasks)}  rev={d.get('rev',1)}")
 # 待评审（相 3 的输入）
 ready = [t for t in tasks if t["status"] == "evidence_ready"]
 if ready:
-    print("待评审 (调 gstack/review): " + ", ".join(t["id"] for t in ready))
+    print("待评审 (按 references/review/completion-review.md 独立评审): " + ", ".join(t["id"] for t in ready))
 
 # 阻塞项
 blocked = [t for t in tasks if t["status"] == "blocked"]

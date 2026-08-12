@@ -17,9 +17,11 @@
   `~/.cc-switch/skills/`，且设为 `skillStorageLocation=cc_switch` + `skillSyncMethod=auto`，
   是 **auto 同步权威源**——只装到 `~/.claude/skills` 而不同步它，会被 CC Switch 回滚。
   所以两处都要装（`scripts/install.sh` 已自动处理）。
-- v3 的核心（SKILL.md + 5 个模板）**完全自包含**，无外部代码依赖；ralph 循环范式与
-  ponytail 懒惰阶梯都以文字协议内联在 SKILL.md 里。唯一外部依赖是评审用的 gstack 技能，
-  且评审契约那行 `HARNESS_REVIEW:` 也可由任意技能或人工产出，不硬绑 gstack。
+- v3 的核心（SKILL.md + 模板 + 内联评审方法论）**完全自包含**，无外部 skill/代码依赖；
+  ralph 循环范式、ponytail 懒惰阶梯、评审方法论（`references/review/` 下 spec-review 与
+  completion-review，源自 gstack、已剥离运行时）都以文字协议内联，装到任意 IDE 都能完整运行。
+  gstack 仅作**可选兜底**（内联不足时取更深维度）；评审契约那行 `HARNESS_REVIEW:` 由内联方法论、
+  gstack 或人工任一产出均可。
 
 ## 阶段 1 · 前置检查
 
@@ -61,9 +63,13 @@ bash scripts/install.sh
 ```sh
 # 两处应存在且一致
 diff -rq ~/.claude/skills/task-harness ~/.cc-switch/skills/task-harness && echo "两处一致 OK"
-# SKILL.md 应为 v3（约 84 行，首行是 --- frontmatter）
+# SKILL.md 应为 v3.1（约 100 行，首行是 --- frontmatter）
 wc -l ~/.claude/skills/task-harness/SKILL.md
 head -1 ~/.claude/skills/task-harness/SKILL.md
+# 内联评审三件应就位（v3.1 起）
+for f in spec-review.md completion-review.md NOTICE; do
+  [ -f ~/.claude/skills/task-harness/references/review/$f ] && echo "OK review/$f" || echo "!! 缺 review/$f"
+done
 # 无 v1/v2 残留关键词
 grep -rlE "feature_list|validate_harness|passes\": false" ~/.claude/skills/task-harness && echo "!! 有残留" || echo "干净 OK"
 ```
@@ -71,19 +77,21 @@ grep -rlE "feature_list|validate_harness|passes\": false" ~/.claude/skills/task-
 若只装了 Claude 没装 CC Switch（机器还没装 CC Switch app），先跳过 diff，等装好 CC Switch
 后重跑 `bash scripts/install.sh` 补同步。
 
-## 阶段 4 · 评审依赖（gstack，可选但推荐）
+## 阶段 4 · 评审兜底（gstack，可选）
 
-task-harness v3 的相 1/相 3 会调 `gstack/plan-eng-review` 与 `gstack/review`。确认它们在：
+task-harness v3 的评审方法论已自包含内联（`references/review/` 下），无需 gstack 也能完整运行。
+装有 gstack 时，内联方法论不足以判定（需 specialists 深度/复杂 diff）时可回退调 `gstack/review`
+/ `gstack/plan-eng-review` 取更深维度。确认 gstack 是否在位：
 
 ```sh
 for s in review plan-eng-review careful; do
-  [ -f ~/.claude/skills/$s/SKILL.md ] && echo "OK $s" || echo "缺 $s"
+  [ -f ~/.claude/skills/$s/SKILL.md ] && echo "OK $s" || echo "可选，未装 $s"
 done
 ```
 
 若缺失：gstack 技能族由 CC Switch 主库同步（`~/.cc-switch/skills/`），或其 runtime 在
-`D:/Code_Runtime/skills-runtime/gstack`。恢复 CC Switch 技能库后即补齐。gstack 缺席时
-task-harness 仍可运行，评审改由人工按 `HARNESS_REVIEW: pass|fail | <task-id> | <理由>` 产出。
+`D:/Code_Runtime/skills-runtime/gstack`。gstack 缺席时 task-harness 仍完整运行，评审由内联方法论承担；
+确实无法判定时如实标 `blocked` 或改由人工按 `HARNESS_REVIEW: pass|fail | <task-id> | <理由>` 产出。
 
 ## 阶段 5 · 冒烟测试（确认全链路 + 上下文恒定）
 
@@ -115,6 +123,6 @@ rm -rf "$D"
 
 ## 完成标准
 
-- `~/.claude/skills/task-harness` 与 `~/.cc-switch/skills/task-harness` 一致，且为 v3。
+- `~/.claude/skills/task-harness` 与 `~/.cc-switch/skills/task-harness` 一致，且为 v3.1。
 - 阶段 5 冒烟测试通过。
 - git 远端 = 本地安装源，三处一致，可再次一次性复现。

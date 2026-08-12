@@ -10,7 +10,7 @@ description: task-harness v3 推进 · A 单步（默认，不进 loop）
    若无 eligible：全部 passed 则报告完成；否则报告 blocked 原因，停。
 4. 只读该任务及它触及的代码，按 ponytail 阶梯先砍伪需求再动手，实现其范围。绝不为"精简"砍验证/安全/错误处理。
 5. 跑该任务 verify → 向 `.harness/evidence.jsonl` 追加 `{id,task,cmd,exit,tests,rev,ts}` → 置 evidence_ready。
-6. 调 `gstack/review`（传证据 id + 变更范围）独立评审；实现者不评审自己。
+6. 在独立上下文按 `references/review/completion-review.md` 评审（传证据 id + 变更范围）；实现者不评审自己。内联不足且本机装有 gstack 时可回退调 `gstack/review`。
    评审结尾输出恰好一行：`HARNESS_REVIEW: pass|fail | <task-id> | <理由>`
    - pass → status 置 passed，向 `.harness/reviews.jsonl` 追加一条。
    - fail → 回 active，记录原因，本轮结束。

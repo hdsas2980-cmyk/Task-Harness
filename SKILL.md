@@ -3,11 +3,11 @@ name: task-harness
 description: 长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，主会话上下文不随任务数增长。适用于需跨多次会话增量推进的大型工程。
 ---
 
-# task-harness v3
+# task-harness v3.1
 
 ## 哲学
-最小的骨架换最大的问责。一轮一任务（ralph）、存在性先于实现（ponytail）、完成由不可变证据加独立评审判定（gstack）。
-状态全部落盘，评审外包给独立上下文，主会话上下文恒定——与任务总数无关。
+最小的骨架换最大的问责。一轮一任务（ralph 范式）、存在性先于实现（ponytail 阶梯）、完成由不可变证据加独立评审判定（评审方法论内联，源自 gstack）。三处外包全部内联为文字协议，自包含、零外部 skill 依赖，装到任意 IDE 都能完整运行。
+状态全部落盘，评审在独立上下文进行，主会话上下文恒定——与任务总数无关。
 宁可骨架简陋，不可问责缺失：绝不为"精简"砍掉验证、安全、错误处理。
 
 ## 核心不变式
@@ -31,7 +31,7 @@ pending → active → evidence_ready → passed
 ### 相 1 · 设计（一次性）
 1. 对每个候选任务先过 ponytail 阶梯（见下），从源头砍掉伪任务。
 2. 起草 `tasks.json`：稳定 id、priority、一句话 desc、`depends_on`、可执行 `verify` 命令。
-3. 调 `gstack/plan-eng-review` 做规格独立评审（依赖环、路径归属、命令可执行性），结论追加 progress.txt。
+3. 按内联的 `references/review/spec-review.md` 做规格独立评审（依赖环、路径归属、命令可执行性、工程原则），结论追加 progress.txt。（内联不足且本机装有 gstack 时可回退调 `gstack/plan-eng-review`。）
 
 ### 相 2 · 执行（每任务 fresh context）
 1. `bash init.sh` → 输出紧凑状态（进度计数加下一个 eligible 任务），不打印全量清单。
@@ -41,7 +41,7 @@ pending → active → evidence_ready → passed
 5. 结尾输出执行状态块（见下），供循环判定是否继续。
 
 ### 相 3 · 评审（委托独立上下文）
-1. 对 `evidence_ready` 任务调 `gstack/review`，传证据 id 加变更范围。
+1. 对 `evidence_ready` 任务，在独立上下文按内联的 `references/review/completion-review.md` 评审，传证据 id 加变更范围。（内联不足且本机装有 gstack 时可回退调 `gstack/review`。）
 2. review 结尾按契约吐一行 `HARNESS_REVIEW:` → 追加 `reviews.jsonl`。
 3. `pass` → `passed`；`fail` → 回 `active` 带新一轮证据。
 
@@ -55,11 +55,22 @@ pending → active → evidence_ready → passed
 7. 能跑通的最小实现是什么？
 （绝不对"理解代码"偷懒；绝不砍验证/安全/错误处理/无障碍。）
 
-## gstack 调用点与评审契约
-- 规格评审：`gstack/plan-eng-review`（相 1）。
-- 完成评审：`gstack/review`（相 3）。
-- 执行护栏（可选）：挂 `gstack/careful` hook 拦截误删/强推。
-- 评审结论契约（评审 skill 结尾必须输出恰好一行）：
+## 破坏性命令自查护栏（自包含，不依赖任何外部文件）
+执行任何可能不可逆或有广泛影响的命令前，先自查并向用户确认，不得在验证/评审中擅自运行：
+- 递归删除（`rm -rf`、批量删目录）、`git clean -f`、覆盖写入未备份文件。
+- 数据破坏（`DROP TABLE`、`TRUNCATE`、无 WHERE 的 UPDATE/DELETE、删数据卷）。
+- 历史/远端改写（`git reset --hard`、`git push --force`、`--amend` 已推提交）。
+- 生产/共享系统变更（部署、重启服务、改 DNS/网关/权限、`kubectl delete`）。
+- 未限定路径的递归 `grep`/`find`（须带目录白名单 + timeout，目录不存在必须失败、不得回退到根）。
+命中即先停下说明"要做什么、可能出什么错、是否可逆"，取得确认再执行；本护栏是文字纲领，装有 gstack 时其 `careful` hook 作为可真正拦截的运行时兜底。
+
+## 评审调用点与评审契约
+评审方法论已自包含内联进本 skill，装到任意 IDE 都能完整运行，不依赖用户环境里有无 gstack：
+- 规格评审：`references/review/spec-review.md`（相 1）。
+- 完成评审：`references/review/completion-review.md`（相 3）。
+- 兜底（可选）：内联清单不足以判定时，若本机装有 gstack 可回退调 `gstack/plan-eng-review` / `gstack/review` 取更深维度；两者都不可用则如实标 `blocked`，绝不伪造 pass。
+- 破坏性命令自查护栏（自包含，见上文「破坏性命令自查护栏」节）；装有 gstack 时其 `careful` hook 作为可真正拦截的兜底。
+- 评审结论契约（评审结尾必须输出恰好一行）：
   ```
   HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
   ```

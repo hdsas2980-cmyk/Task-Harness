@@ -17,7 +17,7 @@ team 并行与 loop 均为**可选增强**，默认走单步、单任务、不�
    绝不为"精简"砍掉验证、安全、错误处理。
 5. 跑该任务的 verify → 向 `.harness/evidence.jsonl` 追加一条
    `{id,task,cmd,exit,tests,rev,ts}` → 置 evidence_ready。
-6. 调 `gstack/review`（传证据 id + 变更范围）独立评审；实现者不评审自己。
+6. 在独立上下文按 `references/review/completion-review.md` 评审（传证据 id + 变更范围）；实现者不评审自己。（内联不足且本机装有 gstack 时可回退调 `gstack/review`。）
    评审结尾按契约输出恰好一行：`HARNESS_REVIEW: pass|fail | <task-id> | <理由>`
    - pass → status 置 passed，向 `.harness/reviews.jsonl` 追加一条。
    - fail → 回 active，记录原因，本轮结束（下轮带新证据重试）。
@@ -36,7 +36,7 @@ team 并行与 loop 均为**可选增强**，默认走单步、单任务、不�
 仅当本轮存在多个「依赖互不相关」的 eligible pending 任务，且你显式要求并行时启用。
 
 - 只对 `depends_on` 无交叉、触及文件不重叠的任务分派子 Agent。
-- 每个子 Agent 仍严格「只领一个任务」，独立跑 verify、独立走 gstack/review。
+- 每个子 Agent 仍严格「只领一个任务」，独立跑 verify、独立按内联 completion-review 评审（或回退 gstack/review）。
 - 有依赖关系或改同一批文件的任务，禁止并行，退回单步串行。
 - 并行不得共享上下文以求"效率"——否则破坏"上下文不随任务数增长"的核心宗旨。
 - 汇总：各子 Agent 各自追加 evidence/reviews/progress，主会话只收状态块，不回读细节。

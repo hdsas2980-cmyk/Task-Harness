@@ -4,7 +4,7 @@ description: task-harness v3 推进 · C loop 连推（可选，显式确认）
 
 按 task-harness v3 进入 loop 连续推进。这是**可选**模式，本命令即视为显式开启。
 
-每轮执行一次 A 单步流程（读 progress 最后一条 → init.sh → 选唯一 eligible pending → 实现 → verify → 追加 evidence → gstack/review → 更新 status/reviews → 追加 progress → 输出状态块）。
+每轮执行一次 A 单步流程（读 progress 最后一条 → init.sh → 选唯一 eligible pending → 实现 → verify → 追加 evidence → 按 completion-review.md 独立评审 → 更新 status/reviews → 追加 progress → 输出状态块）。
 
 循环控制：
 - 每轮之间 fresh context：不携带上一轮代码/证据细节，只凭落盘状态。
