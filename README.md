@@ -1,4 +1,4 @@
-# Task Harness v3.1
+# Task Harness v3.2 (TRAE edition)
 
 长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，
 主会话上下文不随任务数增长。适用于需跨多次会话增量推进的大型工程。
@@ -51,27 +51,48 @@ v3.1 把评审方法论抽出来内联进本仓库，实现真正的自包含：
   没装则内联方法论承担全部评审，确实无法判定时如实标 `blocked`。
 - 破坏性命令拦截：内联护栏是文字纲领，装有 gstack 时其 `careful` hook 作为可真正拦截的运行时兜底。
 
+## v3.2 的变化（TRAE edition）
+
+从"任意 IDE 可用"贴合到 TRAE 工具的宿主机制，核心哲学与流程零改动，只改 4 类宿主耦合：
+
+- **斜杠命令迁到 TRAE 规范**：三个推进命令补上 TRAE 命令要求的 `name` frontmatter，正文去 Claude 化；
+  TRAE edition 使用 `/task-harness-next-a|b|c`（TRAE 从 `~/.trae-cn/commands/` 读命令，不从技能目录读）。
+- **评审落地为 TRAE 子智能体**：新增 `agents/harness-reviewer.md`（只读、独立上下文），把「在独立上下文
+  按 completion-review.md 评审」固化为 TRAE 一等公民的 Subagent，落实"实现者≠评审者"。也可用内置
+  `general_purpose_task` 手写评审 prompt，二者等价。
+- **启动器双入口**：逻辑抽成 `references/templates/init.py`（纯 Python，幂等，兼容带 BOM 的
+  Windows 导出），新增 `init.ps1`（PowerShell，TRAE 默认 shell）与 `init.sh`（bash）两个薄入口。
+- **安装器目标改为 TRAE**：`install.ps1` / `install.sh` 默认装到 `~/.trae-cn/skills` +
+  `~/.trae-cn/commands` + `~/.trae-cn/agents`；加 `-Claude` / `--claude` 参数才装 legacy
+  Claude Code / CC Switch（双生态共存，决策项 A）。
+- **去掉 gstack 兜底**：TRAE 版评审完全内联，无 gstack 运行时依赖；gstack/CC Switch 仅保留在
+  `--claude` legacy 安装与旧文档里。
+- 新增 [TRAE-SETUP.md](TRAE-SETUP.md)：纯 TRAE 环境的一次性重建流程 + 冒烟自检 + 项目规则双写建议。
+
 ## 一次性安装
 
-克隆后一条命令部署到 Claude Code；若检测到 CC Switch 主库会一并同步
-（CC Switch 是 auto 同步权威源，不同步会被回滚）。
+克隆后一条命令部署到 TRAE（全局 `~/.trae-cn/skills` + `~/.trae-cn/commands` + `~/.trae-cn/agents`）；
+加 `--claude` / `-Claude` 参数时额外同步 legacy Claude Code / CC Switch（双生态共存）。
 
 ```sh
 git clone https://github.com/hdsas2980-cmyk/Task-Harness.git
 cd Task-Harness
 
-# Linux / macOS / Windows-bash
+# TRAE（默认）—— Linux / macOS / Windows-bash
 bash scripts/install.sh
+# TRAE + legacy Claude/CC Switch
+bash scripts/install.sh --claude
 
-# 或 Windows PowerShell
-powershell -ExecutionPolicy Bypass -File scripts\install.ps1
+# 或 Windows PowerShell（TRAE 默认）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -Claude   # legacy 可选
 ```
 
-脚本幂等，可重复运行；每次把 `~/.claude/skills/task-harness/`
-（及 CC Switch 主库）覆盖为仓库当前版本。重装系统后即可一次性还原环境。
+脚本幂等，可重复运行；每次把 `~/.trae-cn/skills/task-harness/`（及 legacy
+`~/.claude/skills/`、CC Switch 主库）覆盖为仓库当前版本。重装系统后即可一次性还原环境。
 
-重装系统或 Claude 被重置后的完整重建步骤（含前置检查、网络/鉴权注意、核验与冒烟测试），
-见 [SETUP.md](SETUP.md)——可整段贴给 Claude Code 让它逐步执行。
+纯 TRAE 环境的完整重建步骤（含前置检查、核验与冒烟测试）见 [TRAE-SETUP.md](TRAE-SETUP.md)；
+legacy Claude Code / CC Switch 重建流程见 [SETUP.md](SETUP.md)。
 
 ## 新机安装 / 从旧版更新的注意事项
 
@@ -116,11 +137,15 @@ references/templates/        项目初始化模板
   evidence.jsonl             追加日志：verify 证据
   reviews.jsonl             追加日志：评审结论
   progress.txt               叙事日志，只读最后一条
-  init.sh                    紧凑状态加单任务加载（自动探测 python，utf-8 输出）
+  init.py                    紧凑状态加单任务加载（纯 Python，幂等；init.sh / init.ps1 都只调它）
+  init.sh                    紧凑状态加载 bash 入口（Linux/macOS/Windows-bash）
+  init.ps1                   紧凑状态加载 PowerShell 入口（TRAE 默认 shell）
   next-step.md               推进提示词模板（A 单步 / B team 并行 / C loop）
-commands/                    斜杠命令（安装后可 /task-harness-next-a|b|c 调用）
-scripts/install.sh           一次性安装（bash）
-scripts/install.ps1          一次性安装（PowerShell）
+commands/                    推进命令（安装到 TRAE ~/.trae-cn/commands 后可 /task-harness-next-a|b|c）
+agents/harness-reviewer.md   只读独立评审子智能体（安装到 TRAE ~/.trae-cn/agents）
+scripts/install.sh           一次性安装（bash）——TRAE 默认，--claude 装 legacy
+scripts/install.ps1          一次性安装（PowerShell）——TRAE 默认，-Claude 装 legacy
+TRAE-SETUP.md                TRAE 环境安装/冒烟 / legacy SETUP.md 与 Claude/CC Switch
 ```
 
 ## 使用
@@ -146,13 +171,14 @@ scripts/install.ps1          一次性安装（PowerShell）
 
 ### 相 2/3 · 推进（每轮一任务）
 
-每轮 `bash .harness/init.sh` 取下一个 eligible 任务，执行、记 `evidence.jsonl`、
-按内联的 `references/review/completion-review.md` 在独立上下文评审、按 `HARNESS_REVIEW:`
-一行契约更新 `status` 并记 `reviews.jsonl`，直至 `EXIT_SIGNAL: true`。
+每轮运行 `.harness/init.ps1`（PowerShell）或 `.harness/init.sh`（bash）取下一个 eligible 任务，
+执行、记 `evidence.jsonl`、按内联的 `references/review/completion-review.md` 在独立上下文评审
+（TRAE 下由 `harness-reviewer` 子智能体完成）、按 `HARNESS_REVIEW:` 一行契约更新 `status` 并记
+`reviews.jsonl`，直至 `EXIT_SIGNAL: true`。
 
 ### 斜杠命令
 
-安装脚本会把三个推进命令装到 `~/.claude/commands/`，直接在 Claude Code 里调用：
+安装脚本会把三个推进命令装到 TRAE `~/.trae-cn/commands/`，直接在 TRAE 里调用：
 
 | 命令 | 模式 | 行为 |
 | --- | --- | --- |

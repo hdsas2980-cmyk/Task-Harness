@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# task-harness v3 一次性安装脚本 (Linux/macOS/Windows-bash)
-# 用法: git clone <repo> && cd Task-Harness && bash scripts/install.sh
-# 幂等: 可重复运行; 每次覆盖为仓库当前版本。
+# task-harness v3.2 (TRAE edition) install script (Linux/macOS/Windows-bash)
+# Usage: git clone <repo> && cd Task-Harness && bash scripts/install.sh
+#        Add --claude to also install to legacy Claude Code + CC Switch targets.
+# Idempotent: safe to rerun; overwrites to current repo state each time.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+TRAE_DIR="$HOME/.trae-cn"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CC_SWITCH_DIR="$HOME/.cc-switch"
+LEGACY=0
+for a in "$@"; do [ "$a" = "--claude" ] && LEGACY=1; done
 
 install_to() {
   local base="$1" label="$2"
@@ -19,29 +23,34 @@ install_to() {
   echo "  [OK] $label -> $dst"
 }
 
-echo "task-harness v3 安装"
-echo "源: $REPO_DIR"
+echo "task-harness v3.2 (TRAE edition) install"
+echo "source: $REPO_DIR"
 
-# 1. Claude Code 实际读取目录 (必装)
-install_to "$CLAUDE_DIR" "Claude Code"
-
-# 2. CC Switch 主库 (存在才装; 它是 auto 同步权威源, 不同步会被回滚)
-if [ -d "$CC_SWITCH_DIR" ]; then
-  install_to "$CC_SWITCH_DIR" "CC Switch 主库"
-else
-  echo "  [跳过] 未检测到 CC Switch ($CC_SWITCH_DIR); 仅装到 Claude Code。"
-fi
-
-# 3. 斜杠命令 (只装到 Claude Code 命令目录)
-CMD_DIR="$CLAUDE_DIR/commands"
+# 1. TRAE global skill + commands + agents (default, required)
+install_to "$TRAE_DIR" "TRAE skill"
+CMD_DIR="$TRAE_DIR/commands"
 mkdir -p "$CMD_DIR"
-if [ -d "$REPO_DIR/commands" ]; then
-  cp "$REPO_DIR/commands/"task-harness-next-*.md "$CMD_DIR/"
-  echo "  [OK] 斜杠命令 -> $CMD_DIR (/task-harness-next-a|b|c)"
+cp "$REPO_DIR/commands/"task-harness-next-*.md "$CMD_DIR/"
+echo "  [OK] TRAE slash commands -> $CMD_DIR (/task-harness-next-a|b|c)"
+AGENTS_DIR="$TRAE_DIR/agents"
+if [ -d "$REPO_DIR/agents" ]; then
+  mkdir -p "$AGENTS_DIR"
+  cp "$REPO_DIR/agents/"*.md "$AGENTS_DIR/"
+  echo "  [OK] 评审子智能体 -> $AGENTS_DIR (harness-reviewer)"
+fi
+
+# 2. legacy Claude Code + CC Switch (optional, --claude)
+if [ "$LEGACY" = "1" ]; then
+  install_to "$CLAUDE_DIR" "Claude Code (legacy)"
+  mkdir -p "$CLAUDE_DIR/commands"
+  cp "$REPO_DIR/commands/"task-harness-next-*.md "$CLAUDE_DIR/commands/"
+  if [ -d "$CC_SWITCH_DIR" ]; then
+    install_to "$CC_SWITCH_DIR" "CC Switch (legacy)"
+  else
+    echo "  [跳过] no CC Switch at $CC_SWITCH_DIR"
+  fi
 fi
 
 echo ""
-echo "完成。校验 SKILL.md:"
-head -1 "$CLAUDE_DIR/skills/task-harness/SKILL.md" >/dev/null && echo "  Claude: $(wc -l < "$CLAUDE_DIR/skills/task-harness/SKILL.md") 行"
-echo ""
-echo "下一步: 在目标项目里进入相 1 设计, 复制 references/templates/ 下模板起草 tasks.json。"
+echo "done. TRAE SKILL.md: $(wc -l < "$TRAE_DIR/skills/task-harness/SKILL.md") lines"
+echo "next: restart/reload TRAE, verify smoke, then design phase 1 in a project."
