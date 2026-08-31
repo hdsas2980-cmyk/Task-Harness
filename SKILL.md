@@ -1,97 +1,132 @@
 ---
 name: task-harness
-description: 长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，主会话上下文不随任务数增长。适用于需跨多次会话增量推进的大型工程。
+description: Codex 专用长时任务骨架：一轮一任务、状态落盘、证据与独立评审共同判定完成，严格控制上下文增长。适用于需要跨多个 Codex 任务/会话推进的大型工程。
 ---
 
-# task-harness v3.1
+# task-harness v3.1 — Codex Native
 
-## 哲学
-最小的骨架换最大的问责。一轮一任务（ralph 范式）、存在性先于实现（ponytail 阶梯）、完成由不可变证据加独立评审判定（评审方法论内联，源自 gstack）。三处外包全部内联为文字协议，自包含、零外部 skill 依赖，装到任意 IDE 都能完整运行。
-状态全部落盘，评审在独立上下文进行，主会话上下文恒定——与任务总数无关。
-宁可骨架简陋，不可问责缺失：绝不为"精简"砍掉验证、安全、错误处理。
+## 定位与哲学
+
+最小的骨架换最大的问责。保留 v3.1 的三条主线：
+
+- **一轮一任务**：每个 Codex 任务只推进一个可验证的最小工作单元。
+- **存在性先于实现**：先过 ponytail 阶梯，砍掉不需要、重复或可由平台能力解决的任务。
+- **证据 + 独立评审才算完成**：`passed` 不是模型自报，而是可重放的验证证据和独立评审共同成立。
+
+状态全部落盘，主 Codex 任务只读取当前任务和它触及的文件，不随任务数量增长而回读历史。宁可骨架简陋，不可问责缺失：不因“精简”砍掉验证、安全、错误处理和可回滚性。
+
+本版本是 **Codex 原生适配版**：不依赖 Claude Code、CC Switch、gstack、MCP 或其他第三方 Skill；不写入 `.cc-switch\skills`；不使用 Claude 专属 slash command。`commands/` 目录仅保留上游兼容资料，不属于 Codex 安装内容。
+
+## Codex 运行契约
+
+1. **当前 Codex 任务 = 一轮**：默认只推进一个任务；不要在同一轮顺手处理邻近任务。
+2. **状态外置**：项目根或 `.harness/` 保存 `tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
+3. **最小读取**：先运行 `references/templates/init.ps1` 或 `bash references/templates/init.sh`；随后只读当前任务、依赖任务的结论和任务触及的代码。
+4. **工具原生优先**：在 Windows/Codex 上优先使用 PowerShell 和现有本地工具；已有测试、构建、格式化工具优先于新增依赖。
+5. **评审隔离**：实现者不能充当独立评审者。优先使用另一个 Codex 上下文/评审任务；无法获得独立上下文时必须如实记为 `blocked`，不可把同一轮自检冒充独立评审。
+6. **不伪造完成**：没有可重放证据、评审契约或依据不足时，状态只能是 `evidence_ready`、`blocked` 或回到 `active`。
 
 ## 核心不变式
-1. 一次会话只推进一个任务（选依赖已满足、优先级最高的 pending）。
-2. 只加载当前任务加它触及的代码；不回读全量任务清单，不回读旧证据。
-3. `passed` 必须同时持有一条 evidence 记录加一条 pass 评审记录，缺一不可。
-4. 实现者不等于评审者（评审经 skill 调用在独立上下文完成）。
-5. 依据不足时如实标 `blocked`，绝不伪造完成。
 
-## 5 态机
-```
+1. 一次 Codex 任务只推进一个依赖已满足、优先级最高的 `pending`/`regressed` 任务。
+2. 不回读全量清单、不回读旧证据；只读取推进当前任务所需的最小范围。
+3. `passed` 必须同时存在一条对应 `evidence.jsonl` 记录和一条 `reviews.jsonl` 的 `pass` 记录。
+4. 评审必须在独立上下文完成，并记录评审上下文/来源。
+5. 任何阻塞必须写入结构化 reason；不得用“看起来没问题”替代验证。
+6. 已通过任务受依赖、接口或环境变化影响时，标记 `regressed` 并回到 `active`。
+
+## 状态机
+
+```text
 pending → active → evidence_ready → passed
                         │              │
                         └─(评审 fail)→ active（带新证据重试）
-   任意态 → blocked（结构化阻塞，记 reason）
+   任意态 → blocked（结构化阻塞，记录 reason）
    passed → regressed（依赖变更导致失效，回 active）
 ```
 
 ## 三相流程
 
 ### 相 1 · 设计（一次性）
-1. 对每个候选任务先过 ponytail 阶梯（见下），从源头砍掉伪任务。
-2. 起草 `tasks.json`：稳定 id、priority、一句话 desc、`depends_on`、可执行 `verify` 命令。
-3. 按内联的 `references/review/spec-review.md` 做规格独立评审（依赖环、路径归属、命令可执行性、工程原则），结论追加 progress.txt。（内联不足且本机装有 gstack 时可回退调 `gstack/plan-eng-review`。）
 
-### 相 2 · 执行（每任务 fresh context）
-1. `bash init.sh` → 输出紧凑状态（进度计数加下一个 eligible 任务），不打印全量清单。
-2. 选唯一一个依赖已满足的最高优先级 `pending` → 置 `active`。
-3. 只读该任务加它触及的代码（ponytail：先读懂再动手），实现其范围。
-4. 跑 `verify` → 追加一条 `evidence.jsonl` → 置 `evidence_ready`。
-5. 结尾输出执行状态块（见下），供循环判定是否继续。
+1. 对候选任务逐级过 ponytail 阶梯，移除伪需求、重复实现和不必要依赖。
+2. 创建 `tasks.json`：稳定 `id`、`priority`、一句话 `desc`、`depends_on`、可执行 `verify`、`status`。
+3. 按 `references/review/spec-review.md` 做规格评审，检查依赖环、路径归属、命令可执行性和工程原则。
+4. 设计评审结论追加到 `progress.txt`；不要把评审意见只留在对话里。
 
-### 相 3 · 评审（委托独立上下文）
-1. 对 `evidence_ready` 任务，在独立上下文按内联的 `references/review/completion-review.md` 评审，传证据 id 加变更范围。（内联不足且本机装有 gstack 时可回退调 `gstack/review`。）
-2. review 结尾按契约吐一行 `HARNESS_REVIEW:` → 追加 `reviews.jsonl`。
-3. `pass` → `passed`；`fail` → 回 `active` 带新一轮证据。
+### 相 2 · 执行（每个 Codex 任务）
 
-## ponytail 阶梯（任务设计与实现时逐级自问）
+1. 运行初始化脚本，读取紧凑状态。
+2. 只把一个 eligible 任务置为 `active`；修改前先确认范围和回滚点。
+3. 只读该任务及其触及的代码，采用最小改动完成实现。
+4. 执行任务的 `verify`；将命令、退出码、测试摘要、代码 revision 和时间追加到 `evidence.jsonl`。
+5. 将任务置为 `evidence_ready`，输出 `HARNESS_STATUS` 状态块，然后停止本轮。
+
+### 相 3 · 评审（独立 Codex 上下文）
+
+1. 独立评审上下文只读取任务定义、变更范围、对应 evidence 和必要代码；禁止借用实现上下文的未落盘结论。
+2. 按 `references/review/completion-review.md` 核查功能、回归、安全、可维护性、验证质量和范围控制。
+3. 评审结尾必须输出恰好一行：
+
+   ```text
+   HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
+   ```
+
+4. 将评审结果追加到 `reviews.jsonl`，`pass` 才能把 `evidence_ready` 改为 `passed`；`fail` 回到 `active` 并带新证据重试。
+
+## ponytail 阶梯
+
 1. 这个任务/代码需要存在吗？（YAGNI）
-2. 代码库里已有可复用的吗？
+2. 项目中已有可复用实现吗？
 3. 标准库/语言原生能解决吗？
-4. 平台/框架原生能力能解决吗？
-5. 已装的依赖能解决吗？
-6. 一行能解决吗？
+4. 平台或框架原生能力能解决吗？
+5. 已安装依赖能解决吗？
+6. 一行或一个配置能解决吗？
 7. 能跑通的最小实现是什么？
-（绝不对"理解代码"偷懒；绝不砍验证/安全/错误处理/无障碍。）
 
-## 破坏性命令自查护栏（自包含，不依赖任何外部文件）
-执行任何可能不可逆或有广泛影响的命令前，先自查并向用户确认，不得在验证/评审中擅自运行：
-- 递归删除（`rm -rf`、批量删目录）、`git clean -f`、覆盖写入未备份文件。
-- 数据破坏（`DROP TABLE`、`TRUNCATE`、无 WHERE 的 UPDATE/DELETE、删数据卷）。
-- 历史/远端改写（`git reset --hard`、`git push --force`、`--amend` 已推提交）。
-- 生产/共享系统变更（部署、重启服务、改 DNS/网关/权限、`kubectl delete`）。
-- 未限定路径的递归 `grep`/`find`（须带目录白名单 + timeout，目录不存在必须失败、不得回退到根）。
-命中即先停下说明"要做什么、可能出什么错、是否可逆"，取得确认再执行；本护栏是文字纲领，装有 gstack 时其 `careful` hook 作为可真正拦截的运行时兜底。
+绝不对“理解代码”偷懒；绝不砍验证、安全、错误处理和无障碍要求。
 
-## 评审调用点与评审契约
-评审方法论已自包含内联进本 skill，装到任意 IDE 都能完整运行，不依赖用户环境里有无 gstack：
-- 规格评审：`references/review/spec-review.md`（相 1）。
-- 完成评审：`references/review/completion-review.md`（相 3）。
-- 兜底（可选）：内联清单不足以判定时，若本机装有 gstack 可回退调 `gstack/plan-eng-review` / `gstack/review` 取更深维度；两者都不可用则如实标 `blocked`，绝不伪造 pass。
-- 破坏性命令自查护栏（自包含，见上文「破坏性命令自查护栏」节）；装有 gstack 时其 `careful` hook 作为可真正拦截的兜底。
-- 评审结论契约（评审结尾必须输出恰好一行）：
-  ```
-  HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
-  ```
-  harness 只解析这一行，按 pass/fail 更新状态并追加 reviews.jsonl。
-- 子 Agent 派发防空转：首行即命令、硬输出契约收尾、数据外置、显式 agentType、未回契约行即判空转重试一次。详见 `references/templates/next-step.md` 的「D. 子 Agent 派发契约」。
+## Codex 上下文预算规则
 
-## 执行状态块（相 2 结尾输出，供循环判定）
-```
-HARNESS_STATUS: <task-id> <IN_PROGRESS|COMPLETE|BLOCKED>
-PROGRESS: <passed>/<total>
-EXIT_SIGNAL: <false|true>
-```
-所有任务 `passed` 时 EXIT_SIGNAL=true，循环结束。
+- 启动时只读初始化脚本的摘要，不把 100+ 任务全文塞进上下文。
+- 任务选择只依赖 `tasks.json` 的必要字段；旧 evidence/review 只按当前 `task` 过滤读取。
+- 大型日志、构建产物、截图、抓包和报告放 `.harness/artifacts/`，在任务里记录路径，不内联全文。
+- 需要跨轮传递的信息写入 `progress.txt` 最后一段；不要依赖聊天历史。
+- 每轮结束前清楚写出“已做 / 证据 / 下一步 / 阻塞”，让下一轮可从磁盘恢复。
 
-## 文件（放 `.harness/` 或项目根）
-- `tasks.json` — 任务清单，唯一真相源。
-- `evidence.jsonl` — 追加日志：`{id,task,cmd,exit,tests,rev,ts}`。
-- `reviews.jsonl` — 追加日志：`{id,task,ev,skill,verdict,ts}`。
-- `progress.txt` — 叙事日志，只读最后一条。
-- `init.sh` — 紧凑状态加单任务加载。
-- `next-step.md` — 推进提示词模板（A 单步默认 / B team 并行可选 / C loop 可选）。
+## 破坏性命令护栏
 
-## 修订（不走重型 amendment 流程）
-改任务定义 = 直接编辑 tasks.json 加顶层 `rev+1` 加 progress.txt 记一句；受影响的 `passed` 任务标 `regressed` 回 active。
+执行下列动作前，必须先说明影响、目标绝对路径、可逆性，并取得本轮用户明确授权；验证或评审不得擅自执行：
+
+- 递归删除、批量移动、`git clean`、覆盖未备份文件；
+- `DROP TABLE`、`TRUNCATE`、无条件数据删除/更新；
+- `git reset --hard`、强制推送、改写已发布历史；
+- 部署、服务重启、权限/DNS/网关变更；
+- 未限制目录范围的递归搜索。
+
+授权只对当前明确动作有效，不自动扩展到邻近目录、其他项目或生产环境。所有覆盖/移动先建立带时间戳的备份或隔离副本。
+
+## 文件契约
+
+建议将运行文件放在项目 `.harness/`；兼容项目根目录：
+
+- `tasks.json`：唯一任务真相源；状态为 `pending`、`active`、`evidence_ready`、`passed`、`blocked`、`regressed`。
+- `evidence.jsonl`：追加 `{id, task, cmd, exit, tests, rev, ts}`，可增加 `artifacts`、`environment`。
+- `reviews.jsonl`：追加 `{id, task, ev, reviewer_context, verdict, ts}`。
+- `progress.txt`：追加式叙事日志，只读取最后一段恢复背景。
+- `references/templates/init.ps1`：Windows/Codex 原生初始化脚本。
+- `references/templates/init.sh`：Git Bash/Linux/macOS 兼容初始化脚本。
+
+## 修改任务定义
+
+直接编辑 `tasks.json`，顶层 `rev` 加一，并在 `progress.txt` 追加原因。受影响的 `passed` 任务必须标记 `regressed` 回到 `active`。不要删除历史 evidence/review；它们是审计链的一部分。
+
+## 完成标准
+
+只有同时满足以下条件才报告完成：
+
+- 所有任务为 `passed`；
+- 每个 `passed` 任务均有对应 evidence 和独立 `pass` review；
+- 最新验证可重放，退出码为 0；
+- 没有未记录的阻塞、越界修改或未备份破坏性动作；
+- 输出最后一条 `HARNESS_STATUS`，其中 `EXIT_SIGNAL: true`。
