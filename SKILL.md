@@ -15,7 +15,7 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 
 状态全部落盘，主 Codex 任务只读取当前任务和它触及的文件，不随任务数量增长而回读历史。宁可骨架简陋，不可问责缺失：不因“精简”砍掉验证、安全、错误处理和可回滚性。
 
-本版本是 **Codex 原生适配版**：不依赖 Claude Code、CC Switch、gstack、MCP 或其他第三方 Skill；不写入 `.cc-switch\skills`；不使用 Claude 专属 slash command。`commands/` 目录仅保留上游兼容资料，不属于 Codex 安装内容。
+本版本是 **Codex 原生适配版**：不依赖 Claude Code、CC Switch、gstack、MCP 或其他第三方 Skill；不写入 `.cc-switch\skills`；不使用 Claude 专属 slash command；本分支不包含 `commands/` 目录。
 
 ## Codex 运行契约
 

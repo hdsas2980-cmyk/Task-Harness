@@ -1,1 +1,1 @@
-{"_comment": "追加日志：每次评审追加一行，删除本注释行后使用。示例 → {\"id\":\"rv-01\",\"task\":\"t-01\",\"ev\":\"ev-01\",\"skill\":\"gstack/review\",\"verdict\":\"pass\",\"ts\":\"2026-07-31T12:05:00Z\"}"}
+{"_comment": "追加日志：每次独立评审追加一行，删除本注释行后使用。示例 → {\"id\":\"rv-01\",\"task\":\"t-01\",\"ev\":\"ev-01\",\"reviewer_context\":\"codex-independent-task\",\"verdict\":\"pass\",\"reason\":\"范围、验证和回归检查均通过\",\"ts\":\"2026-08-31T12:05:00+08:00\"}"}

@@ -40,7 +40,7 @@ JSON 文件被模型更谨慎对待。模型更可能只修改特定字段（如
 
 ### 3. 快速上下文恢复（Fast Context Restore）
 
-`init.sh` 只输出推进下一步所需的最小信息：进度计数、待评审/阻塞项、以及下一个 eligible 任务。v3 刻意不打印全量清单与 git 历史，以保证主会话上下文不随任务数增长。
+`init.ps1`（Windows）和 `init.sh`（Git Bash/Linux/macOS）只输出推进下一步所需的最小信息：进度计数、待评审/阻塞项、以及下一个 eligible 任务。v3 刻意不打印全量清单与 git 历史，以保证主会话上下文不随任务数增长。
 
 ### 4. 增量推进（Incremental Progress）
 
@@ -93,7 +93,7 @@ infra-01             # 基础设施类
 
 ### 2. 依赖（depends_on）
 
-v3 用 `depends_on` 表达任务间关系，取代 v1 的 `category` 标签。`init.sh` 据此只挑"依赖已 passed"的任务作为下一个 eligible，自动形成正确执行顺序；相 1 的规格评审（`references/review/spec-review.md`）负责校验依赖图无环。写清依赖比按代码层级贴标签更能约束执行顺序。
+v3 用 `depends_on` 表达任务间关系，取代 v1 的 `category` 标签。`init.ps1`/`init.sh` 据此只挑"依赖已 passed"的任务作为下一个 eligible，自动形成正确执行顺序；相 1 的规格评审（`references/review/spec-review.md`）负责校验依赖图无环。写清依赖比按代码层级贴标签更能约束执行顺序。
 
 ```
 "depends_on": []            # 无前置，可立即执行
