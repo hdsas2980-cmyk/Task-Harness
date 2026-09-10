@@ -1,33 +1,135 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>长任务看板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{color-scheme:light;--line:#dce1e6;--muted:#647079;--ink:#202a30;--green:#15805f;--blue:#246ca9;--amber:#9d7000;--red:#bd3850;--violet:#76579c}*{box-sizing:border-box}body{margin:0;background:#f6f8f9;color:var(--ink);font:14px/1.6 system-ui,"Microsoft YaHei",sans-serif;letter-spacing:0}button,input,select{font:inherit}button,select,input[type=search]{border:1px solid #c6cfd6;border-radius:5px;background:white;padding:8px 12px;color:inherit}button{cursor:pointer}button:hover{border-color:var(--green)}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}header{border-bottom:1px solid var(--line);background:white;padding:22px 28px;display:flex;justify-content:space-between;gap:18px;align-items:center}h1{font-size:23px;margin:0}h2{font-size:16px;margin:0 0 12px}.subtitle,.muted{color:var(--muted);font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions label{display:flex;gap:6px;align-items:center}main{max-width:1500px;margin:auto;padding:20px 28px}.status{min-height:28px;color:var(--muted);overflow-wrap:anywhere}.error{color:var(--red)}.stats{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-block:1px solid var(--line);padding:15px 0;margin:10px 0 22px}.stat{padding:0 15px;border-right:1px solid var(--line)}.stat:last-child{border:0}.stat b{display:block;font-size:26px}.stat span{font-size:12px;color:var(--muted)}.flow{padding:0 0 18px;border-bottom:1px solid var(--line);margin-bottom:22px}.flow p{margin:3px 0;overflow-wrap:anywhere}.layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:28px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.toolbar input{flex:1;min-width:130px}.task{background:white;border:1px solid var(--line);border-left:4px solid #8c98a0;padding:14px;margin-bottom:10px;border-radius:5px;overflow-wrap:anywhere}.taskhead{display:flex;justify-content:space-between;gap:12px}.taskhead strong{min-width:0}.task[data-status=passed]{border-left-color:var(--green)}.task[data-status=active]{border-left-color:var(--blue)}.task[data-status=evidence_ready]{border-left-color:var(--violet)}.task[data-status=blocked],.task[data-status=regressed]{border-left-color:var(--red)}.badge{font-size:12px;white-space:nowrap}.desc{margin:8px 0}.meta{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.warning{color:var(--red);font-size:12px}aside section{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:20px;min-width:0}.bar{display:flex;height:10px;background:#e2e7eb;overflow:hidden;border-radius:3px}.bar i{height:100%}.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;margin-top:8px}.legend i{display:inline-block;width:8px;height:8px;margin-right:4px}.event{border-bottom:1px solid var(--line);padding:9px 0;overflow-wrap:anywhere}.event small{display:block;color:var(--muted)}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 system-ui;max-height:320px;overflow:auto}.empty{padding:25px 0;color:var(--muted)}.drop-active{outline:3px dashed var(--green)}.source{margin-bottom:12px}details summary{cursor:pointer;font-size:12px;color:var(--muted)}@media(max-width:850px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:repeat(4,1fr);row-gap:16px}header{align-items:flex-start}}@media(max-width:520px){header{display:block;padding:18px}.actions{margin-top:14px}main{padding:16px}.stats{grid-template-columns:repeat(2,1fr)}.stat b{font-size:23px}.toolbar{display:grid;grid-template-columns:1fr 1fr}.toolbar input{grid-column:1/-1}.taskhead{flex-wrap:wrap}}
+:root{
+  --bg:#f4f5f6; --surface:#fff; --line:#d9dee3; --ink:#1c242b; --muted:#5d6b75;
+  --accent:oklch(62% 0.12 240); --ok:oklch(60% 0.12 150); --warn:oklch(72% 0.13 75);
+  --bad:oklch(58% 0.15 25); --info:oklch(62% 0.12 240);
+  --hover:oklch(96% 0.002 250); --sel:color-mix(in oklch, var(--accent) 6%, white);
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --sans:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 var(--sans);letter-spacing:0}
+button,input,select{font:inherit;color:inherit}
+button{height:32px;padding:0 12px;border:1px solid var(--line);background:var(--surface);border-radius:4px;cursor:pointer}
+button:hover{background:var(--hover)} button:disabled{opacity:.5;cursor:wait}
+button.primary{border-color:color-mix(in oklch,var(--accent) 40%, var(--line));color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+kbd{font:11px/1 var(--mono);border:1px solid var(--line);border-radius:3px;padding:1px 4px;background:var(--surface);color:var(--muted)}
+.top{display:flex;align-items:center;gap:12px;height:44px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.crumb{color:var(--muted);font-size:12px;white-space:nowrap}
+h1{font-size:16px;font-weight:500;margin:0;letter-spacing:0}
+.grow{flex:1;min-width:0}
+.search{height:32px;width:min(280px,32vw);padding:0 8px;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+.actions{display:flex;gap:8px;align-items:center}
+.hint{color:var(--muted);font-size:12px}
+.hero{display:grid;grid-template-columns:minmax(240px,1.4fr) repeat(3,minmax(96px,.7fr));gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--surface)}
+.card{border:1px solid var(--line);border-radius:8px;padding:12px 16px;background:var(--surface);min-width:0}
+.card.hero-card{border-left:2px solid var(--accent)}
+.k{font-size:11px;color:var(--muted);margin:0 0 4px}
+.v{font-size:20px;font-weight:500;font-variant-numeric:tabular-nums slashed-zero;letter-spacing:0}
+.v.mono{font-family:var(--mono);font-size:16px}
+.sub{color:var(--muted);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strip{display:flex;gap:16px;padding:6px 16px;border-bottom:1px solid var(--line);background:color-mix(in oklch, var(--bg) 70%, white);font-size:12px}
+.strip b{font-variant-numeric:tabular-nums;font-weight:500}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.bar{display:flex;height:4px;background:#e6eaed;margin:8px 16px 0}
+.bar i{height:100%}
+.work{display:grid;grid-template-rows:auto 1fr;height:calc(100vh - 168px);min-height:280px}
+.tools{display:flex;gap:8px;align-items:center;padding:8px 16px;flex-wrap:wrap}
+.chip{height:28px;padding:0 8px;border:1px solid var(--line);background:transparent;border-radius:4px;color:var(--muted)}
+.chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:color-mix(in oklch,var(--accent) 8%, white)}
+select{height:32px;border:1px solid var(--line);border-radius:4px;background:var(--surface);padding:0 8px}
+.table-wrap{overflow:auto;scrollbar-gutter:stable;border-top:1px solid var(--line);background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{position:sticky;top:0;background:var(--surface);z-index:1;font-weight:500;color:var(--muted);text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
+td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums slashed-zero}
+.id, .ts{font-family:var(--mono);font-variant-numeric:tabular-nums slashed-zero}
+tr:hover td{background:var(--hover)}
+tr[aria-selected=true] td{background:var(--sel);box-shadow:inset 2px 0 0 var(--accent)}
+.warn{color:var(--bad)}
+.side{display:none}
+.status{padding:4px 16px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);background:var(--surface)}
+.status.err{color:var(--bad)}
+pre{margin:0;white-space:pre-wrap;font:12px/1.45 var(--mono)}
+@media(min-width:1100px){
+  .work{grid-template-columns:minmax(0,1fr) 280px;grid-template-rows:auto 1fr}
+  .tools{grid-column:1/-1}
+  .side{display:block;border-left:1px solid var(--line);overflow:auto;padding:12px;background:color-mix(in oklch,var(--bg) 80%, white)}
+  .side h2{font-size:13px;font-weight:500;margin:0 0 8px}
+  .event{padding:8px 0;border-bottom:1px solid var(--line)}
+  .event small{display:block;color:var(--muted)}
+}
+@media(max-width:720px){
+  .hero{grid-template-columns:1fr 1fr}
+  .top{flex-wrap:wrap;height:auto;padding:8px}
+  .search{width:100%}
+  .work{height:auto}
+}
 </style>
 </head>
 <body>
-<header><div><h1>长任务看板</h1><div class="subtitle" id="project">尚未编排</div></div><div class="actions"><button id="load">载入任务</button><button id="refresh">刷新任务</button><label><input id="auto" type="checkbox">自动刷新</label></div></header>
-<main id="drop">
-<div class="source"><button id="directory">选择任务目录</button><input id="files" type="file" multiple accept=".json,.jsonl,.txt" hidden></div>
-<div id="status" class="status" role="status" aria-live="polite"></div>
-<div class="stats" id="stats"></div>
-<section class="flow"><h2>状态机</h2><p>待处理 → 进行中 → 待独立评审 → 已通过</p><p class="muted">评审未通过：待独立评审 → 进行中　｜　任意状态 → 已阻塞　｜　已通过 → 需回归 → 进行中</p></section>
-<div class="layout"><section><h2>任务队列</h2><div class="toolbar"><input id="search" type="search" aria-label="搜索任务" placeholder="搜索编号或描述"><select id="filter" aria-label="任务状态"><option value="all">全部状态</option></select><select id="sort" aria-label="排序方式"><option value="priority">优先级</option><option value="status">状态</option><option value="id">任务编号</option></select></div><div id="tasks"></div></section>
-<aside><section><h2>完成度</h2><div id="bar" class="bar"></div><div id="legend" class="legend"></div><p id="completion" class="meta"></p></section><section><h2>最近证据与评审</h2><div id="events"></div></section><section><h2>进度日志</h2><pre id="progress"></pre></section></aside></div>
+<header class="top">
+  <div class="crumb">项目 / 长任务</div>
+  <h1>看板</h1>
+  <div class="grow" id="project"></div>
+  <input class="search" id="search" type="search" aria-label="搜索任务" placeholder="搜索编号或描述">
+  <div class="actions">
+    <button class="primary" id="load" type="button">载入任务 <kbd>L</kbd></button>
+    <button id="refresh" type="button">刷新任务 <kbd>R</kbd></button>
+  </div>
+</header>
+<section class="hero">
+  <article class="card hero-card"><p class="k">下一个可推进任务</p><div class="v mono" id="hero-id">—</div><div class="sub" id="hero-desc">尚未编排</div></article>
+  <article class="card"><p class="k">已声明通过</p><div class="v" id="m-pass">0/0</div><div class="sub" id="m-rev">版本 —</div></article>
+  <article class="card"><p class="k">待独立评审</p><div class="v" id="m-ready">0</div><div class="sub">证据与评审未闭环</div></article>
+  <article class="card"><p class="k">已阻塞</p><div class="v" id="m-block">0</div><div class="sub" id="m-next">J / K 移动行</div></article>
+</section>
+<div class="bar" id="bar"></div>
+<div class="strip" id="strip"></div>
+<main class="work">
+  <div class="tools" id="tools"></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>编号</th><th>状态</th><th class="num">优先级</th><th>描述</th><th>依赖</th><th>验证命令</th><th>门禁</th>
+      </tr></thead>
+      <tbody id="tasks"></tbody>
+    </table>
+  </div>
+  <aside class="side">
+    <h2>状态机</h2>
+    <p class="hint">待处理 → 进行中 → 待独立评审 → 已通过</p>
+    <p class="hint">评审未通过 → 进行中　任意状态 → 已阻塞　已通过 → 需回归</p>
+    <h2>最近证据与评审</h2>
+    <div id="events"></div>
+    <h2>进度日志</h2>
+    <pre id="progress"></pre>
+  </aside>
 </main>
+<div class="status" id="status" role="status" aria-live="polite"></div>
 <script type="application/json" id="snapshot">__HARNESS_SNAPSHOT__</script>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
 const labels = {pending:'待处理',active:'进行中',evidence_ready:'待独立评审',passed:'已通过',blocked:'已阻塞',regressed:'需回归'};
-const colors = {pending:'#8c98a0',active:'#246ca9',evidence_ready:'#76579c',passed:'#15805f',blocked:'#bd3850',regressed:'#9d7000'};
+const colors = {pending:'#8c98a0',active:'var(--info)',evidence_ready:'oklch(62% 0.10 290)',passed:'var(--ok)',blocked:'var(--bad)',regressed:'var(--warn)'};
 const states = Object.keys(labels), names = ['tasks.json','evidence.jsonl','reviews.jsonl','progress.txt'];
 const embedded = JSON.parse($('snapshot').textContent);
-let model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:''}, directory = null, mode = 'snapshot', busy = false;
+let model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:''};
+let live = false, selected = 0, filter = 'all';
+let chain = Promise.resolve();
 const esc = value => String(typeof value === 'object' ? JSON.stringify(value) : value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function status(text, error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
+function status(text, error=false){$('status').textContent=text;$('status').classList.toggle('err',error);}
 function parse(texts){
   if(!Object.hasOwn(texts,'tasks.json')) throw Error('缺少任务文件；原任务保持不变');
   let tasks;
@@ -47,70 +149,104 @@ function parse(texts){
   });}
   return {tasks,evidence:jsonl('evidence.jsonl'),reviews:jsonl('reviews.jsonl'),progress:texts['progress.txt']||''};
 }
-function install(texts, source){const next=parse(texts);model=next;render();status(source+' · 更新于 '+new Date().toLocaleTimeString('zh-CN'));}
+function install(texts, source){model=parse(texts);render();status(source+' · '+new Date().toLocaleTimeString('zh-CN'));}
 function gate(t){
   if(t.status!=='passed')return '';
   const r=model.reviews.filter(r=>r.task===t.id).at(-1);
   const ev=r && model.evidence.find(e=>e.task===t.id && e.id && e.id===r.ev);
-  return r?.verdict==='pass' && r.reviewer_context && ev?.exit===0 ? '已关联证据与评审记录；独立性及可重放性须人工核验' : '完成门禁缺口：缺少关联的成功证据或独立评审记录';
+  return r?.verdict==='pass' && r.reviewer_context && ev?.exit===0 ? '已关联记录，独立性须人工核验' : '门禁缺口：缺成功证据或独立评审';
+}
+function eligible(all){
+  const byId=new Map(all.map(t=>[t.id,t]));
+  return all.filter(t=> (t.status==='pending'||t.status==='regressed') && (t.depends_on||[]).every(d=>byId.get(d)?.status==='passed'))
+    .sort((a,b)=>Number(a.priority??999999)-Number(b.priority??999999));
 }
 function render(){
   const all=model.tasks.tasks;
   const counts=Object.fromEntries(states.map(s=>[s,all.filter(t=>t.status===s).length]));
-  $('project').textContent=(model.tasks.project||embedded.project||'未命名项目')+' · 版本 '+(model.tasks.rev??'未设置');
-  $('stats').innerHTML=states.map(s=>'<div class="stat"><b>'+counts[s]+'</b><span>'+labels[s]+'</span></div>').join('')+'<div class="stat"><b>'+all.length+'</b><span>任务总数</span></div>';
-  $('bar').innerHTML=states.map(s=>'<i title="'+labels[s]+'：'+counts[s]+'" style="background:'+colors[s]+';width:'+counts[s]/(all.length||1)*100+'%"></i>').join('');
-  $('legend').innerHTML=states.map(s=>'<span><i style="background:'+colors[s]+'"></i>'+labels[s]+' '+counts[s]+'</span>').join('');
-  $('completion').textContent='已声明通过 '+counts.passed+'/'+all.length+' · 证据 '+model.evidence.length+' 条 · 评审 '+model.reviews.length+' 条';
-  $('progress').textContent=model.progress||'暂无进度日志';
-  const q=$('search').value.toLowerCase(), filter=$('filter').value, sort=$('sort').value;
-  const ts=all.filter(t=>(filter==='all'||filter===t.status)&&JSON.stringify(t).toLowerCase().includes(q));
-  ts.sort((a,b)=>sort==='id'?a.id.localeCompare(b.id):sort==='status'?states.indexOf(a.status)-states.indexOf(b.status):(Number(a.priority??999999)-Number(b.priority??999999)));
+  const next=eligible(all)[0];
+  $('project').textContent=(model.tasks.project||embedded.project||'未命名项目')+' · rev '+(model.tasks.rev??'—');
+  $('hero-id').textContent=next?next.id:'—';
+  $('hero-desc').textContent=next?(next.desc||next.description||'未填写描述'):(all.length?'无 eligible 任务':'尚未编排');
+  $('m-pass').textContent=counts.passed+'/'+all.length;
+  $('m-rev').textContent='证据 '+model.evidence.length+' · 评审 '+model.reviews.length;
+  $('m-ready').textContent=String(counts.evidence_ready);
+  $('m-block').textContent=String(counts.blocked);
+  $('bar').innerHTML=states.map(s=>'<i title="'+labels[s]+'" style="background:'+colors[s]+';width:'+(counts[s]/(all.length||1)*100)+'%"></i>').join('');
+  $('strip').innerHTML=states.map(s=>'<span><i class="dot" style="background:'+colors[s]+'"></i>'+labels[s]+' <b>'+counts[s]+'</b></span>').join('');
+  $('tools').innerHTML=['all',...states].map(s=>'<button type="button" class="chip" data-filter="'+s+'" aria-pressed="'+(filter===s)+'">'+(s==='all'?'全部':labels[s])+'</button>').join('')+
+    '<select id="sort" aria-label="排序方式"><option value="priority">优先级</option><option value="status">状态</option><option value="id">任务编号</option></select>'+
+    '<span class="hint">实时读取当前 .harness，不打开资源管理器</span>';
+  const sort=$('sort')?$('sort').value:'priority';
+  const q=$('search').value.toLowerCase();
+  const rows=all.filter(t=>(filter==='all'||t.status===filter)&&JSON.stringify(t).toLowerCase().includes(q));
+  rows.sort((a,b)=>sort==='id'?a.id.localeCompare(b.id):sort==='status'?states.indexOf(a.status)-states.indexOf(b.status):(Number(a.priority??999999)-Number(b.priority??999999)));
+  if(selected>=rows.length) selected=Math.max(0,rows.length-1);
   const byId=new Map(all.map(t=>[t.id,t]));
-  $('tasks').innerHTML=ts.map(t=>{
-    const deps=(t.depends_on||[]).map(d=>esc(d)+'（'+(byId.has(d)?labels[byId.get(d).status]:'任务缺失')+'）').join('、');
-    return '<article class="task" data-status="'+t.status+'"><div class="taskhead"><strong>'+esc(t.id)+'</strong><span class="badge">'+labels[t.status]+'</span></div><p class="desc">'+esc(t.desc||t.description||'未填写描述')+'</p><div class="meta">优先级 '+esc(t.priority??'未设置')+' · 依赖：'+(deps||'无')+'</div>'+(t.reason?'<p class="warning">阻塞原因：'+esc(t.reason)+'</p>':'')+'<details><summary>验证命令</summary><pre>'+esc(t.verify||'未填写')+'</pre></details>'+(gate(t)?'<p class="warning">'+esc(gate(t))+'</p>':'')+'</article>';
-  }).join('')||'<div class="empty">暂无匹配任务</div>';
+  $('tasks').innerHTML=rows.map((t,i)=>{
+    const deps=(t.depends_on||[]).map(d=>esc(d)+'/'+(byId.has(d)?labels[byId.get(d).status]:'缺失')).join('、')||'无';
+    const g=gate(t);
+    return '<tr data-i="'+i+'" aria-selected="'+(i===selected)+'"><td class="id">'+esc(t.id)+'</td><td><i class="dot" style="background:'+colors[t.status]+'"></i>'+labels[t.status]+'</td><td class="num">'+(t.priority??'—')+'</td><td>'+esc(t.desc||t.description||'未填写')+'</td><td>'+deps+'</td><td class="id">'+esc(t.verify||'未填写')+'</td><td class="'+(g.startsWith('门禁')?'warn':'')+'">'+(t.reason?'阻塞：'+esc(typeof t.reason==='string'?t.reason:JSON.stringify(t.reason))+(g?' · ':'') : '')+esc(g||'—')+'</td></tr>';
+  }).join('')||'<tr><td colspan="7">暂无匹配任务。L 载入当前项目，R 刷新。</td></tr>';
   const verdict={pass:'通过',fail:'未通过'};
-  const events=[...model.evidence.map(x=>({...x,kind:'e'})),...model.reviews.map(x=>({...x,kind:'r'}))].sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||''))).slice(0,10);
-  $('events').innerHTML=events.map(x=>'<div class="event"><b>'+(x.kind==='e'?'证据':'评审')+' · '+esc(x.task||'无任务编号')+'</b><small>'+(x.kind==='e'?'退出码 '+esc(x.exit??'未知')+' · '+esc(x.tests||x.cmd||''):(verdict[x.verdict]||'未知结论')+' · '+esc(x.reviewer_context||'未记录评审上下文'))+'</small><small>'+esc(x.ts||'未记录时间')+'</small></div>').join('')||'<div class="empty">暂无证据或评审</div>';
+  const events=[...model.evidence.map(x=>({...x,kind:'e'})),...model.reviews.map(x=>({...x,kind:'r'}))].sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||''))).slice(0,8);
+  $('events').innerHTML=events.map(x=>'<div class="event"><b>'+(x.kind==='e'?'证据':'评审')+' · <span class="id">'+esc(x.task||'—')+'</span></b><small>'+(x.kind==='e'?'退出码 '+esc(x.exit??'未知'):(verdict[x.verdict]||'未知')+' · '+esc(x.reviewer_context||'未记录上下文'))+'</small><small class="ts">'+esc(x.ts||'未记录时间')+'</small></div>').join('')||'<p class="hint">暂无证据或评审</p>';
+  $('progress').textContent=model.progress||'暂无进度日志';
 }
-async function filesToTexts(files){const result={};for(const f of files){if(names.includes(f.name))result[f.name]=await f.text();}return result;}
-async function guarded(action){if(busy)return;busy=true;$('refresh').disabled=true;try{await action();}catch(e){status('读取失败：'+e.message,true);}finally{busy=false;$('refresh').disabled=false;}}
-async function loadFiles(files){await guarded(async()=>{const texts=await filesToTexts(files);install(texts,'已载入所选任务');directory=null;mode='manual';$('auto').checked=false;});}
-async function refresh(){await guarded(async()=>{
-  if(directory){
-    const texts={};
-    for(const n of names){try{texts[n]=await (await directory.getFileHandle(n)).getFile().then(f=>f.text());}catch(e){if(e.name!=='NotFoundError')throw e;}}
-    install(texts,'已刷新任务目录');
-  }else if(mode==='http'){
-    const texts={};
-    for(const n of names){const r=await fetch(new URL((embedded.base||'./')+n,location.href),{cache:'no-store'});if(r.ok)texts[n]=await r.text();else if(r.status!==404)throw Error('任务文件读取失败');}
-    install(texts,'已刷新项目文件');
-  }else if(mode==='manual'){
-    $('auto').checked=false;$('files').value='';$('files').click();status('重新选择任务文件以读取最新内容');
+async function fetchHarness(){
+  const texts={}; let found=false; const errors=[];
+  for(const n of names){
+    try{
+      const r=await fetch(new URL((embedded.base||'./')+n, location.href), {cache:'no-store'});
+      if(r.ok){texts[n]=await r.text(); found=true;}
+      else if(r.status!==404) errors.push(n);
+    }catch(e){errors.push(n);}
+  }
+  if(!found) throw Error(errors.length?'无法读取当前项目任务文件':'未找到当前项目任务文件');
+  if(errors.length && errors.length<names.length) {/* partial is ok */}
+  return texts;
+}
+function guarded(fn){
+  const run=chain.then(async()=>{
+    $('refresh').disabled=true;$('load').disabled=true;
+    try{await fn();}catch(e){status('读取失败：'+e.message,true);}
+    finally{$('refresh').disabled=false;$('load').disabled=false;}
+  });
+  chain=run.catch(()=>{});
+  return run;
+}
+async function loadProject(){await guarded(async()=>{
+  try{const texts=await fetchHarness(); live=true; install(texts,'已载入当前项目任务');}
+  catch(e){
+    live=false;
+    if(embedded.files && Object.hasOwn(embedded.files,'tasks.json')) install(embedded.files,'已载入当前项目快照');
+    else {status('当前项目尚未编排任务',true); render();}
+  }
+});}
+async function refreshProject(){await guarded(async()=>{
+  if(live || location.protocol==='http:' || location.protocol==='https:'){
+    try{const texts=await fetchHarness(); live=true; install(texts,'已刷新当前项目任务');}
+    catch(e){status('刷新失败：'+e.message+'，已保留上次任务',true);}
   }else{
-    // Regeneration replaces this file atomically; a reload reads the newer embedded snapshot.
     location.reload();
   }
 });}
-$('filter').insertAdjacentHTML('beforeend',states.map(s=>'<option value="'+s+'">'+labels[s]+'</option>').join(''));
-['search','filter','sort'].forEach(id=>$(id).addEventListener('input',render));
-$('load').onclick=()=>{$('files').value='';$('files').click();};
-$('files').onchange=e=>{if(e.target.files.length)loadFiles([...e.target.files]);};
-$('refresh').onclick=refresh;
-$('directory').onclick=async()=>{
-  if(!window.showDirectoryPicker){status('当前浏览器不支持目录授权，请使用载入任务');return;}
-  try{const chosen=await window.showDirectoryPicker({mode:'read'});directory=chosen;mode='directory';await refresh();}catch(e){if(e.name!=='AbortError')status('目录授权失败：'+e.message,true);}
-};
-$('auto').onchange=()=>{if($('auto').checked && !directory && mode!=='http'){$('auto').checked=false;status('自动刷新需要授权任务目录，或通过本地网页服务打开');}};
-setInterval(()=>{if($('auto').checked&&!document.hidden)refresh();},5000);
-['dragover','dragenter'].forEach(n=>$('drop').addEventListener(n,e=>{e.preventDefault();$('drop').classList.add('drop-active');}));
-['dragleave','drop'].forEach(n=>$('drop').addEventListener(n,e=>{e.preventDefault();$('drop').classList.remove('drop-active');}));
-$('drop').addEventListener('drop',e=>loadFiles([...e.dataTransfer.files]));
+$('load').onclick=loadProject;
+$('refresh').onclick=refreshProject;
+$('search').addEventListener('input',render);
+$('tools').addEventListener('click',e=>{const b=e.target.closest('[data-filter]'); if(!b)return; filter=b.dataset.filter; render();});
+$('tools').addEventListener('change',e=>{if(e.target.id==='sort')render();});
+document.addEventListener('keydown',e=>{
+  if(e.target.matches('input,select,textarea')) return;
+  if(e.key==='l'||e.key==='L'){e.preventDefault();loadProject();}
+  if(e.key==='r'||e.key==='R'){e.preventDefault();refreshProject();}
+  if(e.key==='j'||e.key==='J'||e.key==='ArrowDown'){e.preventDefault();selected++;render();}
+  if(e.key==='k'||e.key==='K'||e.key==='ArrowUp'){e.preventDefault();selected=Math.max(0,selected-1);render();}
+  if(e.key==='/'){e.preventDefault();$('search').focus();}
+});
 render();
-try{if(embedded.files?.['tasks.json'])install(embedded.files,'任务快照 · 生成于 '+new Date(embedded.generated).toLocaleString('zh-CN'));else status('尚未编排任务');}catch(e){status('快照读取失败：'+e.message,true);}
-if(location.protocol==='http:'||location.protocol==='https:'){mode='http';refresh();}
+try{if(embedded.files && Object.hasOwn(embedded.files,'tasks.json')) install(embedded.files,'已载入当前项目快照'); else status('当前项目尚未编排任务');}catch(e){status('快照读取失败：'+e.message,true);}
+loadProject();
 </script>
 </body>
 </html>
