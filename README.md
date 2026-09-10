@@ -46,7 +46,7 @@ bash scripts/install.sh
 
 ## 使用
 
-安装到 `$CODEX_HOME/skills/task-harness` 后，每个 Codex 任务先按下方“项目看板”用技能绝对路径初始化。不要把工作目录切到 skill，也不要把 `init.ps1` 单独复制到项目——它依赖同目录的生成器与模板。
+安装到 `$CODEX_HOME/skills/task-harness` 后，每个 Codex 任务先按下方“项目看板”用技能绝对路径初始化。不要把工作目录切到 skill，也不要把 `init.ps1` 单独复制到项目——它依赖同目录的 `serve_dashboard.py` 与 `task-harness.html`。
 
 状态文件建议放在项目 `.harness/`：`tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
 
@@ -58,14 +58,13 @@ bash scripts/install.sh
 
 - Windows：`& "<skill>/references/templates/init.ps1" -ProjectDir "<项目绝对路径>"`；兼容旧参数 `-HarnessDir`。
 - Git Bash/Linux/macOS：`bash "<skill>/references/templates/init.sh" "<项目绝对路径>"`。
-- 输入为项目根或 `.harness`；旧版根目录 `tasks.json` 保持原位读取，不迁移。初始无任务也创建空白看板，不创建示例任务。
-- 编排完成首次自动打开；后续初始化仅更新快照。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`。Codex 内优先用浏览器面板打开输出的 `DASHBOARD` 路径；无界面环境记录路径，不声称已打开。
-- 更新任务、证据、评审、日志后重新初始化。每次原子替换派生 HTML，绝不写任务真相源。
-- 「载入任务」「刷新任务」只读取当前项目 `.harness`（同目录 `tasks.json` 等），不打开资源管理器。HTTP 打开时直接 fetch；`file://` 先显示生成快照，刷新则重载已生成页面。
+- 输入为项目根或 `.harness`；旧版根目录 `tasks.json` 保持原位读取，不迁移。初始无任务也复制空白看板并启动服务，不创建示例任务，不自动打开浏览器。
+- 技能只携带一份静态 SPA。初始化把它复制到项目 `.harness/task-harness.html`，然后仅绑定 `127.0.0.1` 提供 HTTP；输出 `DASHBOARD: http://127.0.0.1:<port>/task-harness.html`。
+- 编排完成首次自动打开该 URL；后续初始化复用已有端口。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`。Codex 内用浏览器面板打开 http 地址，不要打开 `file://`。
+- 更新任务、证据、评审、日志后重新初始化或在页面点「刷新任务」。服务只读，绝不写任务真相源。
+- 「载入任务」「刷新任务」只 fetch 当前项目 harness 文件，不打开资源管理器。`file://` 无法读取实时任务。
 - 页面状态中文，JSON 枚举仍保持英文；已通过只表示任务声明，缺少关联证据及评审必须显示门禁缺口，不代替独立评审。
 
-通过 HTTP 使用时，在项目根运行 `python -m http.server 8000 --bind 127.0.0.1`，访问 `http://127.0.0.1:8000/.harness/task-harness.html`。
-
-技能只携带模板和生成器。`.harness/task-harness.html` 与 `.dashboard-opened` 为项目派生产物。初始化不创建任务定义；文件损坏时报错并保留上次有效 HTML。
+不要手工再开一套 `python -m http.server`；初始化脚本会复用 `.harness/.dashboard-server.json` 里的本机端口。`.harness/task-harness.html`、`.dashboard-opened` 与 `.dashboard-server.json` 为项目派生产物。初始化不创建任务定义。
 
 测试：`python -m unittest discover -s tests -v`。测试通过不等于独立评审通过。

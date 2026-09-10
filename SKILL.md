@@ -55,7 +55,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 2. 创建 `tasks.json`：稳定 `id`、`priority`、一句话 `desc`、`depends_on`、可执行 `verify`、`status`。
 3. 按 `references/review/spec-review.md` 做规格评审，检查依赖环、路径归属、命令可执行性和工程原则。
 4. 设计评审结论追加到 `progress.txt`；不要把评审意见只留在对话里。
-5. 编排落盘后必须再次运行初始化生成看板，自动打开项目 `.harness/task-harness.html`。
+5. 编排落盘后必须再次运行初始化：复制独立看板页面，并在 `http://127.0.0.1` 打开。
 
 ### 相 2 · 执行（每个 Codex 任务）
 
@@ -63,7 +63,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 2. 只把一个 eligible 任务置为 `active`；修改前先确认范围和回滚点。
 3. 只读该任务及其触及的代码，采用最小改动完成实现。
 4. 执行任务的 `verify`；将命令、退出码、测试摘要、代码 revision 和时间追加到 `evidence.jsonl`。
-5. 将任务置为 `evidence_ready`，重新初始化刷新看板快照（`-NoOpen` / `--no-open`），输出 `HARNESS_STATUS` 状态块，然后停止本轮。
+5. 将任务置为 `evidence_ready`，重新初始化以确保看板服务在读当前文件（`-NoOpen` / `--no-open`），输出 `HARNESS_STATUS` 状态块，然后停止本轮。
 
 ### 相 3 · 评审（独立 Codex 上下文）
 
@@ -119,7 +119,8 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 - `progress.txt`：追加式叙事日志，只读取最后一段恢复背景。
 - `references/templates/init.ps1`：Windows/Codex 原生初始化脚本。
 - `references/templates/init.sh`：Git Bash/Linux/macOS 兼容初始化脚本。
-- `references/templates/task-harness.html.template` + `render_dashboard.py`：模板与生成器，生成产物在项目 `.harness/task-harness.html`。
+- `references/templates/task-harness.html`：独立 SPA，可复制到任意项目 `.harness/`。
+- `references/templates/serve_dashboard.py`：把 SPA 复制到项目 `.harness/`，仅绑定 `127.0.0.1` 提供 HTTP，不改任务真相源。
 
 ## 项目看板
 
@@ -127,10 +128,11 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 
 - Windows：`& "<skill>/references/templates/init.ps1" -ProjectDir "<项目绝对路径>"`；兼容旧参数 `-HarnessDir`。
 - Git Bash/Linux/macOS：`bash "<skill>/references/templates/init.sh" "<项目绝对路径>"`。
-- 输入为项目根或 `.harness`；旧版根目录 `tasks.json` 保持原位读取，不迁移。初始无任务也创建空白看板，不创建示例任务。
-- 编排完成首次自动打开；后续初始化仅更新快照。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`。Codex 内优先用浏览器面板打开输出的 `DASHBOARD` 路径；无界面环境记录路径，不声称已打开。
-- 更新任务、证据、评审、日志后重新初始化。每次原子替换派生 HTML，绝不写任务真相源。
-- 「载入任务」「刷新任务」只读取当前项目 `.harness`（同目录 `tasks.json` 等），不打开资源管理器。HTTP 打开时直接 fetch；`file://` 先显示生成快照，刷新则重载已生成页面。
+- 输入为项目根或 `.harness`；旧版根目录 `tasks.json` 保持原位读取，不迁移。初始无任务也复制空白看板并启动服务，不创建示例任务，不自动打开浏览器。
+- 技能只携带一份静态 SPA。初始化把它复制到项目 `.harness/task-harness.html`（覆盖页面以便技能更新生效），然后在 `127.0.0.1:8765-8799` 启动只读 HTTP；输出 `DASHBOARD: http://127.0.0.1:<port>/task-harness.html`。
+- 编排完成首次自动用该 URL 打开；后续初始化复用已有端口。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`（仍启动/复用服务并打印 URL）。Codex 内用浏览器面板打开 `DASHBOARD` 的 http 地址，不要打开 `file://`。无界面环境只记录 URL。
+- 更新任务、证据、评审、日志后重新初始化或在页面点「刷新任务」。服务只暴露看板和 `tasks.json` / `evidence.jsonl` / `reviews.jsonl` / `progress.txt`，绝不写任务真相源。
+- 「载入任务」「刷新任务」只 fetch 当前项目 harness 文件，不打开资源管理器，不使用目录选择器。`file://` 无法读取实时任务，必须通过 `http://127.0.0.1` 打开。
 - 页面状态中文，JSON 枚举仍保持英文；已通过只表示任务声明，缺少关联证据及评审必须显示门禁缺口，不代替独立评审。
 
 ## 修改任务定义

@@ -11,8 +11,8 @@ foreach($candidate in @('python3', 'python', 'py')) {
     if($LASTEXITCODE -eq 0) { $Python = $candidate; break }
   }
 }
-if(-not $Python) { throw '需要 Python 3 来生成项目任务看板。' }
-$Arguments = @((Join-Path $PSScriptRoot 'render_dashboard.py'), $ProjectDir)
+if(-not $Python) { throw '需要 Python 3 来通过 127.0.0.1 打开任务看板。' }
+$Arguments = @((Join-Path $PSScriptRoot 'serve_dashboard.py'), $ProjectDir)
 if($NoOpen) { $Arguments += '--no-open' }
 if($Open) { $Arguments += '--open' }
 & $Python @Arguments

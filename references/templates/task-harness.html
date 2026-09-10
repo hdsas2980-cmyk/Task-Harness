@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>长任务看板</title>
+<meta name="task-harness" content="spa">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
@@ -117,19 +118,19 @@ pre{margin:0;white-space:pre-wrap;font:12px/1.45 var(--mono)}
   </aside>
 </main>
 <div class="status" id="status" role="status" aria-live="polite"></div>
-<script type="application/json" id="snapshot">__HARNESS_SNAPSHOT__</script>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
 const labels = {pending:'待处理',active:'进行中',evidence_ready:'待独立评审',passed:'已通过',blocked:'已阻塞',regressed:'需回归'};
 const colors = {pending:'#8c98a0',active:'var(--info)',evidence_ready:'oklch(62% 0.10 290)',passed:'var(--ok)',blocked:'var(--bad)',regressed:'var(--warn)'};
 const states = Object.keys(labels), names = ['tasks.json','evidence.jsonl','reviews.jsonl','progress.txt'];
-const embedded = JSON.parse($('snapshot').textContent);
 let model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:''};
-let live = false, selected = 0, filter = 'all';
+let selected = 0, filter = 'all', sortBy = 'priority';
 let chain = Promise.resolve();
 const esc = value => String(typeof value === 'object' ? JSON.stringify(value) : value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function status(text, error=false){$('status').textContent=text;$('status').classList.toggle('err',error);}
+function isLocalFile(){return location.protocol==='file:';}
+function localFileHint(){return '当前是本地文件打开，浏览器禁止读取同目录任务。请运行初始化脚本，通过 http://127.0.0.1 打开。';}
 function parse(texts){
   if(!Object.hasOwn(texts,'tasks.json')) throw Error('缺少任务文件；原任务保持不变');
   let tasks;
@@ -165,7 +166,7 @@ function render(){
   const all=model.tasks.tasks;
   const counts=Object.fromEntries(states.map(s=>[s,all.filter(t=>t.status===s).length]));
   const next=eligible(all)[0];
-  $('project').textContent=(model.tasks.project||embedded.project||'未命名项目')+' · rev '+(model.tasks.rev??'—');
+  $('project').textContent=(model.tasks.project||'未命名项目')+' · rev '+(model.tasks.rev??'—');
   $('hero-id').textContent=next?next.id:'—';
   $('hero-desc').textContent=next?(next.desc||next.description||'未填写描述'):(all.length?'无 eligible 任务':'尚未编排');
   $('m-pass').textContent=counts.passed+'/'+all.length;
@@ -176,11 +177,11 @@ function render(){
   $('strip').innerHTML=states.map(s=>'<span><i class="dot" style="background:'+colors[s]+'"></i>'+labels[s]+' <b>'+counts[s]+'</b></span>').join('');
   $('tools').innerHTML=['all',...states].map(s=>'<button type="button" class="chip" data-filter="'+s+'" aria-pressed="'+(filter===s)+'">'+(s==='all'?'全部':labels[s])+'</button>').join('')+
     '<select id="sort" aria-label="排序方式"><option value="priority">优先级</option><option value="status">状态</option><option value="id">任务编号</option></select>'+
-    '<span class="hint">实时读取当前 .harness，不打开资源管理器</span>';
-  const sort=$('sort')?$('sort').value:'priority';
+    '<span class="hint">读取当前 .harness · http://127.0.0.1</span>';
+  if($('sort')) $('sort').value=sortBy;
   const q=$('search').value.toLowerCase();
   const rows=all.filter(t=>(filter==='all'||t.status===filter)&&JSON.stringify(t).toLowerCase().includes(q));
-  rows.sort((a,b)=>sort==='id'?a.id.localeCompare(b.id):sort==='status'?states.indexOf(a.status)-states.indexOf(b.status):(Number(a.priority??999999)-Number(b.priority??999999)));
+  rows.sort((a,b)=>sortBy==='id'?a.id.localeCompare(b.id):sortBy==='status'?states.indexOf(a.status)-states.indexOf(b.status):(Number(a.priority??999999)-Number(b.priority??999999)));
   if(selected>=rows.length) selected=Math.max(0,rows.length-1);
   const byId=new Map(all.map(t=>[t.id,t]));
   $('tasks').innerHTML=rows.map((t,i)=>{
@@ -193,18 +194,36 @@ function render(){
   $('events').innerHTML=events.map(x=>'<div class="event"><b>'+(x.kind==='e'?'证据':'评审')+' · <span class="id">'+esc(x.task||'—')+'</span></b><small>'+(x.kind==='e'?'退出码 '+esc(x.exit??'未知'):(verdict[x.verdict]||'未知')+' · '+esc(x.reviewer_context||'未记录上下文'))+'</small><small class="ts">'+esc(x.ts||'未记录时间')+'</small></div>').join('')||'<p class="hint">暂无证据或评审</p>';
   $('progress').textContent=model.progress||'暂无进度日志';
 }
-async function fetchHarness(){
-  const texts={}; let found=false; const errors=[];
-  for(const n of names){
+async function fetchOne(name){
+  const bases=['./','../'];
+  let lastErr=null;
+  for(const base of bases){
     try{
-      const r=await fetch(new URL((embedded.base||'./')+n, location.href), {cache:'no-store'});
-      if(r.ok){texts[n]=await r.text(); found=true;}
-      else if(r.status!==404) errors.push(n);
-    }catch(e){errors.push(n);}
+      const r=await fetch(new URL(base+name, location.href), {cache:'no-store'});
+      if(r.ok) return await r.text();
+      if(r.status!==404) lastErr=Error(name+' 读取失败');
+    }catch(e){ lastErr=e; }
   }
-  if(!found) throw Error(errors.length?'无法读取当前项目任务文件':'未找到当前项目任务文件');
-  if(errors.length && errors.length<names.length) {/* partial is ok */}
+  if(lastErr) throw lastErr;
+  return null;
+}
+async function fetchHarness(){
+  if(isLocalFile()) throw Error(localFileHint());
+  const texts={};
+  const tasks=await fetchOne('tasks.json');
+  if(!tasks) return null;
+  texts['tasks.json']=tasks;
+  for(const n of names.slice(1)){
+    const text=await fetchOne(n);
+    if(text!==null) texts[n]=text;
+  }
   return texts;
+}
+function showEmpty(message){
+  model={tasks:{tasks:[]},evidence:[],reviews:[],progress:''};
+  selected=0;
+  render();
+  status(message);
 }
 function guarded(fn){
   const run=chain.then(async()=>{
@@ -216,26 +235,33 @@ function guarded(fn){
   return run;
 }
 async function loadProject(){await guarded(async()=>{
-  try{const texts=await fetchHarness(); live=true; install(texts,'已载入当前项目任务');}
-  catch(e){
-    live=false;
-    if(embedded.files && Object.hasOwn(embedded.files,'tasks.json')) install(embedded.files,'已载入当前项目快照');
-    else {status('当前项目尚未编排任务',true); render();}
-  }
+  const texts=await fetchHarness();
+  if(!texts){showEmpty('尚未编排任务'); return;}
+  install(texts,'已载入当前项目任务');
 });}
 async function refreshProject(){await guarded(async()=>{
-  if(live || location.protocol==='http:' || location.protocol==='https:'){
-    try{const texts=await fetchHarness(); live=true; install(texts,'已刷新当前项目任务');}
-    catch(e){status('刷新失败：'+e.message+'，已保留上次任务',true);}
-  }else{
-    location.reload();
+  try{
+    const texts=await fetchHarness();
+    if(!texts){
+      if(model.tasks.tasks.length){status('刷新失败：未找到当前项目 tasks.json，已保留上次任务',true); return;}
+      showEmpty('尚未编排任务');
+      return;
+    }
+    install(texts,'已刷新当前项目任务');
   }
+  catch(e){status('刷新失败：'+e.message+'，已保留上次任务',true);}
 });}
 $('load').onclick=loadProject;
 $('refresh').onclick=refreshProject;
 $('search').addEventListener('input',render);
 $('tools').addEventListener('click',e=>{const b=e.target.closest('[data-filter]'); if(!b)return; filter=b.dataset.filter; render();});
-$('tools').addEventListener('change',e=>{if(e.target.id==='sort')render();});
+$('tools').addEventListener('change',e=>{if(e.target.id==='sort'){sortBy=e.target.value; render();}});
+document.querySelector('.table-wrap').addEventListener('click',e=>{
+  const tr=e.target.closest('tr[data-i]');
+  if(!tr) return;
+  selected=Number(tr.dataset.i);
+  render();
+});
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,select,textarea')) return;
   if(e.key==='l'||e.key==='L'){e.preventDefault();loadProject();}
@@ -245,8 +271,8 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'){e.preventDefault();$('search').focus();}
 });
 render();
-try{if(embedded.files && Object.hasOwn(embedded.files,'tasks.json')) install(embedded.files,'已载入当前项目快照'); else status('当前项目尚未编排任务');}catch(e){status('快照读取失败：'+e.message,true);}
-loadProject();
+if(isLocalFile()) status(localFileHint(), true);
+else loadProject();
 </script>
 </body>
 </html>
