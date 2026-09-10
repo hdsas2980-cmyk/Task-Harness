@@ -10,119 +10,200 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f4f5f6; --surface:#fff; --line:#d9dee3; --ink:#1c242b; --muted:#5d6b75;
-  --accent:oklch(62% 0.12 240); --ok:oklch(60% 0.12 150); --warn:oklch(72% 0.13 75);
-  --bad:oklch(58% 0.15 25); --info:oklch(62% 0.12 240);
+  --gray-0:oklch(100% 0 0); --gray-1:oklch(97% 0 0); --gray-2:oklch(91% 0 0);
+  --gray-6:oklch(50% 0 0); --gray-7:oklch(38% 0 0); --gray-9:oklch(12% 0 0);
+  --accent:oklch(48% 0.12 195); --accent-hover:oklch(43% 0.12 195);
+  --accent-tint:oklch(48% 0.12 195 / 0.08); --on-accent:oklch(100% 0 0);
+  --ok:oklch(60% 0.12 150); --warn:oklch(72% 0.13 75);
+  --bad:oklch(58% 0.15 25); --info:oklch(62% 0.10 250);
   --hover:oklch(96% 0.002 250); --sel:color-mix(in oklch, var(--accent) 6%, white);
   --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
   --sans:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --radius-input:2px; --radius-card:6px;
+  --line:var(--gray-2); --ink:var(--gray-9); --muted:var(--gray-6); --bg:var(--gray-1); --surface:var(--gray-0);
 }
-*{box-sizing:border-box} html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 var(--sans);letter-spacing:0}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:13px/1.4 var(--sans)}
 button,input,select{font:inherit;color:inherit}
-button{height:32px;padding:0 12px;border:1px solid var(--line);background:var(--surface);border-radius:4px;cursor:pointer}
-button:hover{background:var(--hover)} button:disabled{opacity:.5;cursor:wait}
-button.primary{border-color:color-mix(in oklch,var(--accent) 40%, var(--line));color:var(--accent)}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-kbd{font:11px/1 var(--mono);border:1px solid var(--line);border-radius:3px;padding:1px 4px;background:var(--surface);color:var(--muted)}
-.top{display:flex;align-items:center;gap:12px;height:44px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+button{height:32px;padding:0 12px;border:1px solid var(--line);background:var(--surface);border-radius:var(--radius-input);cursor:pointer}
+button:hover{background:var(--hover)}
+button:disabled{opacity:.5;cursor:wait}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+button.primary:hover{background:var(--accent-hover)}
+button:focus-visible,input:focus-visible,select:focus-visible,nav button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:1px
+}
+kbd{font:11px/1 var(--mono);border:1px solid var(--line);border-radius:2px;padding:1px 4px;background:var(--surface);color:var(--muted)}
+svg.icon{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:square;flex:none}
+.app{display:grid;grid-template-columns:220px minmax(0,1fr);grid-template-rows:48px minmax(0,1fr) 28px;height:100vh}
+.rail{grid-row:1/-1;background:var(--gray-1);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:16px;min-width:0;overscroll-behavior:contain}
+.brand .mark{font:12px/1.2 var(--mono);color:var(--muted);letter-spacing:.04em}
+.brand h1{margin:4px 0 0;font-size:16px;font-weight:500;letter-spacing:-0.02em;text-wrap:balance}
+.brand #project{margin-top:4px;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav[aria-label="任务视图"]{display:flex;flex-direction:column;gap:4px}
+nav button{height:32px;justify-content:flex-start;display:flex;align-items:center;gap:8px;width:100%;padding:0 8px;border:0;background:transparent;color:var(--muted);border-radius:var(--radius-input);text-align:left}
+nav button:hover{background:var(--hover);color:var(--ink)}
+nav button[aria-current=page]{background:var(--accent-tint);color:var(--accent)}
+nav button b{margin-left:auto;font-variant-numeric:tabular-nums slashed-zero;font-weight:500;font-family:var(--mono);font-size:11px}
+.legend,.keys{font-size:12px;color:var(--muted)}
+.legend h2,.keys h2,.side h2{font-size:12px;font-weight:500;margin:0 0 8px;color:var(--ink)}
+.legend p{margin:0 0 4px}
+.keys p{margin:0 0 4px;display:flex;justify-content:space-between;gap:8px}
+.top{grid-column:2;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line)}
 .crumb{color:var(--muted);font-size:12px;white-space:nowrap}
-h1{font-size:16px;font-weight:500;margin:0;letter-spacing:0}
 .grow{flex:1;min-width:0}
-.search{height:32px;width:min(280px,32vw);padding:0 8px;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+.search-wrap{position:relative;display:flex;align-items:center}
+.search-wrap svg{position:absolute;left:8px;color:var(--muted)}
+.search{height:32px;width:min(280px,36vw);padding:0 8px 0 28px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface)}
 .actions{display:flex;gap:8px;align-items:center}
-.hint{color:var(--muted);font-size:12px}
-.hero{display:grid;grid-template-columns:minmax(240px,1.4fr) repeat(3,minmax(96px,.7fr));gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--surface)}
-.card{border:1px solid var(--line);border-radius:8px;padding:12px 16px;background:var(--surface);min-width:0}
-.card.hero-card{border-left:2px solid var(--accent)}
-.k{font-size:11px;color:var(--muted);margin:0 0 4px}
-.v{font-size:20px;font-weight:500;font-variant-numeric:tabular-nums slashed-zero;letter-spacing:0}
-.v.mono{font-family:var(--mono);font-size:16px}
+.main{grid-column:2;min-height:0;display:flex;flex-direction:column;background:var(--surface)}
+.hero{display:grid;grid-template-columns:minmax(280px,1.6fr) repeat(3,minmax(96px,.55fr));gap:8px;padding:8px 16px}
+.card{border:1px solid var(--line);border-radius:var(--radius-card);padding:12px 16px;min-width:0;background:var(--surface)}
+.card.hero-card{background:var(--accent-tint);border-color:color-mix(in oklch,var(--accent) 22%, var(--line))}
+.k{font-size:12px;font-weight:500;color:var(--muted);margin:0 0 4px}
+.v{font-size:18px;font-weight:500;font-variant-numeric:tabular-nums slashed-zero;letter-spacing:-0.02em}
+.hero-card .v{font-size:20px;color:var(--accent)}
+.v.mono{font-family:var(--mono);font-size:18px}
 .sub{color:var(--muted);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.strip{display:flex;gap:16px;padding:6px 16px;border-bottom:1px solid var(--line);background:color-mix(in oklch, var(--bg) 70%, white);font-size:12px}
-.strip b{font-variant-numeric:tabular-nums;font-weight:500}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.bar{display:flex;height:4px;background:#e6eaed;margin:8px 16px 0}
-.bar i{height:100%}
-.work{display:grid;grid-template-rows:auto 1fr;height:calc(100vh - 168px);min-height:280px}
+.prop{display:block;height:4px;background:var(--gray-2);margin-top:8px;border-radius:1px;overflow:hidden}
+.prop i{display:block;height:100%;background:var(--accent);width:0}
+.mix{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 16px;padding:0 16px 8px}
+.hbar{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.hbar b{font-variant-numeric:tabular-nums slashed-zero;font-weight:500;color:var(--ink);font-family:var(--mono)}
+.track{grid-column:2/-1;height:4px;background:var(--gray-2);border-radius:1px;overflow:hidden}
+.track i{display:block;height:100%;background:currentColor}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;vertical-align:middle}
+.work{flex:1;min-height:0;display:grid;grid-template-rows:auto 1fr}
 .tools{display:flex;gap:8px;align-items:center;padding:8px 16px;flex-wrap:wrap}
-.chip{height:28px;padding:0 8px;border:1px solid var(--line);background:transparent;border-radius:4px;color:var(--muted)}
-.chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:color-mix(in oklch,var(--accent) 8%, white)}
-select{height:32px;border:1px solid var(--line);border-radius:4px;background:var(--surface);padding:0 8px}
-.table-wrap{overflow:auto;scrollbar-gutter:stable;border-top:1px solid var(--line);background:var(--surface)}
+.chip{height:28px;padding:0 8px;border:1px solid var(--line);background:transparent;border-radius:var(--radius-input);color:var(--muted)}
+.chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:var(--accent-tint)}
+select{height:32px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface);padding:0 8px}
+.hint{color:var(--muted);font-size:12px}
+.table-wrap{overflow:auto;scrollbar-gutter:stable;border-top:1px solid var(--line);min-height:0}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{position:sticky;top:0;background:var(--surface);z-index:1;font-weight:500;color:var(--muted);text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
 td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
 th.num,td.num{text-align:right;font-variant-numeric:tabular-nums slashed-zero}
-.id, .ts{font-family:var(--mono);font-variant-numeric:tabular-nums slashed-zero}
+.id,.ts{font-family:var(--mono);font-variant-numeric:tabular-nums slashed-zero}
+tr td{transition:background 80ms}
 tr:hover td{background:var(--hover)}
 tr[aria-selected=true] td{background:var(--sel);box-shadow:inset 2px 0 0 var(--accent)}
 .warn{color:var(--bad)}
+.skel td{padding:8px 12px}
+.skel b{display:block;height:8px;background:var(--gray-2);border-radius:1px}
 .side{display:none}
-.status{padding:4px 16px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);background:var(--surface)}
+.status{grid-column:2;display:flex;align-items:center;padding:0 16px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);background:var(--surface)}
 .status.err{color:var(--bad)}
 pre{margin:0;white-space:pre-wrap;font:12px/1.45 var(--mono)}
-@media(min-width:1100px){
-  .work{grid-template-columns:minmax(0,1fr) 280px;grid-template-rows:auto 1fr}
-  .tools{grid-column:1/-1}
-  .side{display:block;border-left:1px solid var(--line);overflow:auto;padding:12px;background:color-mix(in oklch,var(--bg) 80%, white)}
-  .side h2{font-size:13px;font-weight:500;margin:0 0 8px}
-  .event{padding:8px 0;border-bottom:1px solid var(--line)}
-  .event small{display:block;color:var(--muted)}
+.event{padding:8px 0;border-bottom:1px solid var(--line)}
+.event small{display:block;color:var(--muted)}
+@media(min-width:1280px){
+  .app{grid-template-columns:220px minmax(0,1fr) 240px}
+  .side{display:block;grid-column:3;grid-row:2;border-left:1px solid var(--line);overflow:auto;padding:12px;background:var(--gray-1)}
+  .status{grid-column:2/4}
+}
+@media(max-width:1023px){
+  .app{grid-template-columns:1fr;grid-template-rows:48px auto minmax(0,1fr) 28px}
+  .rail{display:none}
+  .top,.main,.status{grid-column:1}
 }
 @media(max-width:720px){
-  .hero{grid-template-columns:1fr 1fr}
+  .hero,.mix{grid-template-columns:1fr 1fr}
   .top{flex-wrap:wrap;height:auto;padding:8px}
   .search{width:100%}
-  .work{height:auto}
+}
+@media(prefers-reduced-motion:reduce){
+  tr td{transition:none}
 }
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="crumb">项目 / 长任务</div>
-  <h1>看板</h1>
-  <div class="grow" id="project"></div>
-  <input class="search" id="search" type="search" aria-label="搜索任务" placeholder="搜索编号或描述">
-  <div class="actions">
-    <button class="primary" id="load" type="button">载入任务 <kbd>L</kbd></button>
-    <button id="refresh" type="button">刷新任务 <kbd>R</kbd></button>
-  </div>
-</header>
-<section class="hero">
-  <article class="card hero-card"><p class="k">下一个可推进任务</p><div class="v mono" id="hero-id">—</div><div class="sub" id="hero-desc">尚未编排</div></article>
-  <article class="card"><p class="k">已声明通过</p><div class="v" id="m-pass">0/0</div><div class="sub" id="m-rev">版本 —</div></article>
-  <article class="card"><p class="k">待独立评审</p><div class="v" id="m-ready">0</div><div class="sub">证据与评审未闭环</div></article>
-  <article class="card"><p class="k">已阻塞</p><div class="v" id="m-block">0</div><div class="sub" id="m-next">J / K 移动行</div></article>
-</section>
-<div class="bar" id="bar"></div>
-<div class="strip" id="strip"></div>
-<main class="work">
-  <div class="tools" id="tools"></div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr>
-        <th>编号</th><th>状态</th><th class="num">优先级</th><th>描述</th><th>依赖</th><th>验证命令</th><th>门禁</th>
-      </tr></thead>
-      <tbody id="tasks"></tbody>
-    </table>
-  </div>
-  <aside class="side">
-    <h2>状态机</h2>
-    <p class="hint">待处理 → 进行中 → 待独立评审 → 已通过</p>
-    <p class="hint">评审未通过 → 进行中　任意状态 → 已阻塞　已通过 → 需回归</p>
+<div class="app">
+  <aside class="rail" id="rail">
+    <div class="brand">
+      <div class="mark">task-harness</div>
+      <h1>长任务看板</h1>
+      <div id="project"></div>
+    </div>
+    <nav aria-label="任务视图" id="rail-filters"></nav>
+    <div class="legend">
+      <h2>状态机</h2>
+      <p>待处理 → 进行中 → 待独立评审 → 已通过</p>
+      <p>评审未通过 → 进行中</p>
+      <p>任意状态 → 已阻塞 · 已通过 → 需回归</p>
+    </div>
+    <div class="keys">
+      <h2>键盘</h2>
+      <p><span>载入 / 刷新</span><span><kbd>L</kbd> <kbd>R</kbd></span></p>
+      <p><span>上下行</span><span><kbd>J</kbd> <kbd>K</kbd></span></p>
+      <p><span>搜索</span><span><kbd>/</kbd></span></p>
+    </div>
+  </aside>
+  <header class="top">
+    <div class="crumb">项目 / 长任务 / 队列</div>
+    <div class="grow"></div>
+    <label class="search-wrap">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input class="search" id="search" type="search" aria-label="搜索任务" placeholder="编号、描述、验证命令">
+    </label>
+    <div class="actions">
+      <button class="primary" id="load" type="button">载入任务 <kbd>L</kbd></button>
+      <button id="refresh" type="button">刷新任务 <kbd>R</kbd></button>
+    </div>
+  </header>
+  <main class="main">
+    <section class="hero" aria-label="当前决策">
+      <article class="card hero-card">
+        <p class="k">下一个可推进任务</p>
+        <div class="v mono" id="hero-id">—</div>
+        <div class="sub" id="hero-desc">尚未编排</div>
+      </article>
+      <article class="card">
+        <p class="k">已声明通过</p>
+        <div class="v" id="m-pass">0/0</div>
+        <div class="sub" id="m-rev">版本 —</div>
+        <span class="prop" aria-hidden="true"><i id="pass-bar"></i></span>
+      </article>
+      <article class="card">
+        <p class="k">待独立评审</p>
+        <div class="v" id="m-ready">0</div>
+        <div class="sub">证据与评审未闭环</div>
+      </article>
+      <article class="card">
+        <p class="k">已阻塞</p>
+        <div class="v" id="m-block">0</div>
+        <div class="sub" id="m-next">J / K 移动行</div>
+      </article>
+    </section>
+    <div class="mix" id="mix"></div>
+    <div class="work">
+      <div class="tools" id="tools"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>编号</th><th>状态</th><th class="num">优先级</th><th>描述</th><th>依赖</th><th>验证命令</th><th>门禁</th>
+          </tr></thead>
+          <tbody id="tasks"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+  <aside class="side" id="side">
+    <h2>当前行</h2>
+    <div id="detail"></div>
     <h2>最近证据与评审</h2>
     <div id="events"></div>
     <h2>进度日志</h2>
     <pre id="progress"></pre>
   </aside>
-</main>
-<div class="status" id="status" role="status" aria-live="polite"></div>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+</div>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
 const labels = {pending:'待处理',active:'进行中',evidence_ready:'待独立评审',passed:'已通过',blocked:'已阻塞',regressed:'需回归'};
-const colors = {pending:'#8c98a0',active:'var(--info)',evidence_ready:'oklch(62% 0.10 290)',passed:'var(--ok)',blocked:'var(--bad)',regressed:'var(--warn)'};
+const colors = {pending:'var(--gray-6)',active:'var(--info)',evidence_ready:'oklch(62% 0.10 290)',passed:'var(--ok)',blocked:'var(--bad)',regressed:'var(--warn)'};
 const states = Object.keys(labels), names = ['tasks.json','evidence.jsonl','reviews.jsonl','progress.txt'];
 let model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:''};
 let selected = 0, filter = 'all', sortBy = 'priority';
@@ -162,10 +243,17 @@ function eligible(all){
   return all.filter(t=> (t.status==='pending'||t.status==='regressed') && (t.depends_on||[]).every(d=>byId.get(d)?.status==='passed'))
     .sort((a,b)=>Number(a.priority??999999)-Number(b.priority??999999));
 }
+function depBar(t, byId){
+  const deps=t.depends_on||[];
+  if(!deps.length) return '<span class="prop" title="无依赖"><i style="width:100%"></i></span>';
+  const done=deps.filter(d=>byId.get(d)?.status==='passed').length;
+  return '<span class="prop" title="依赖 '+done+'/'+deps.length+'"><i style="width:'+(done/deps.length*100)+'%"></i></span>';
+}
 function render(){
   const all=model.tasks.tasks;
   const counts=Object.fromEntries(states.map(s=>[s,all.filter(t=>t.status===s).length]));
   const next=eligible(all)[0];
+  const can=eligible(all).length;
   $('project').textContent=(model.tasks.project||'未命名项目')+' · rev '+(model.tasks.rev??'—');
   $('hero-id').textContent=next?next.id:'—';
   $('hero-desc').textContent=next?(next.desc||next.description||'未填写描述'):(all.length?'无 eligible 任务':'尚未编排');
@@ -173,22 +261,38 @@ function render(){
   $('m-rev').textContent='证据 '+model.evidence.length+' · 评审 '+model.reviews.length;
   $('m-ready').textContent=String(counts.evidence_ready);
   $('m-block').textContent=String(counts.blocked);
-  $('bar').innerHTML=states.map(s=>'<i title="'+labels[s]+'" style="background:'+colors[s]+';width:'+(counts[s]/(all.length||1)*100)+'%"></i>').join('');
-  $('strip').innerHTML=states.map(s=>'<span><i class="dot" style="background:'+colors[s]+'"></i>'+labels[s]+' <b>'+counts[s]+'</b></span>').join('');
-  $('tools').innerHTML=['all',...states].map(s=>'<button type="button" class="chip" data-filter="'+s+'" aria-pressed="'+(filter===s)+'">'+(s==='all'?'全部':labels[s])+'</button>').join('')+
+  const bar=$('pass-bar'); if(bar && bar.style) bar.style.width=(all.length?counts.passed/all.length*100:0)+'%';
+  const views=[['all','工作队列',all.length],['eligible','可推进',can],['active','进行中',counts.active],['evidence_ready','待独立评审',counts.evidence_ready],['blocked','已阻塞',counts.blocked]];
+  $('rail-filters').innerHTML=views.map(([id,name,n])=>'<button type="button" data-filter="'+id+'" aria-current="'+(filter===id?'page':'false')+'">'+name+'<b>'+n+'</b></button>').join('');
+  $('mix').innerHTML=states.map(s=>'<div class="hbar" style="color:'+colors[s]+'"><i class="dot" style="background:'+colors[s]+'"></i><span>'+labels[s]+'</span><b>'+counts[s]+'</b><span class="track"><i style="width:'+(counts[s]/(all.length||1)*100)+'%"></i></span></div>').join('');
+  $('tools').innerHTML=['all','eligible',...states].map(s=>'<button type="button" class="chip" data-filter="'+s+'" aria-pressed="'+(filter===s)+'">'+(s==='all'?'全部':s==='eligible'?'可推进':labels[s])+'</button>').join('')+
     '<select id="sort" aria-label="排序方式"><option value="priority">优先级</option><option value="status">状态</option><option value="id">任务编号</option></select>'+
-    '<span class="hint">读取当前 .harness · http://127.0.0.1</span>';
+    '<span class="hint" id="count"></span>';
   if($('sort')) $('sort').value=sortBy;
   const q=$('search').value.toLowerCase();
-  const rows=all.filter(t=>(filter==='all'||t.status===filter)&&JSON.stringify(t).toLowerCase().includes(q));
+  const ready=new Set(eligible(all).map(t=>t.id));
+  const rows=all.filter(t=>{
+    if(filter==='eligible' && !ready.has(t.id)) return false;
+    if(filter!=='all' && filter!=='eligible' && t.status!==filter) return false;
+    return JSON.stringify(t).toLowerCase().includes(q);
+  });
   rows.sort((a,b)=>sortBy==='id'?a.id.localeCompare(b.id):sortBy==='status'?states.indexOf(a.status)-states.indexOf(b.status):(Number(a.priority??999999)-Number(b.priority??999999)));
   if(selected>=rows.length) selected=Math.max(0,rows.length-1);
+  if($('count')) $('count').textContent=rows.length+' 条 · 第 '+(rows.length?selected+1:0)+' 行 · http://127.0.0.1';
   const byId=new Map(all.map(t=>[t.id,t]));
   $('tasks').innerHTML=rows.map((t,i)=>{
     const deps=(t.depends_on||[]).map(d=>esc(d)+'/'+(byId.has(d)?labels[byId.get(d).status]:'缺失')).join('、')||'无';
     const g=gate(t);
-    return '<tr data-i="'+i+'" aria-selected="'+(i===selected)+'"><td class="id">'+esc(t.id)+'</td><td><i class="dot" style="background:'+colors[t.status]+'"></i>'+labels[t.status]+'</td><td class="num">'+(t.priority??'—')+'</td><td>'+esc(t.desc||t.description||'未填写')+'</td><td>'+deps+'</td><td class="id">'+esc(t.verify||'未填写')+'</td><td class="'+(g.startsWith('门禁')?'warn':'')+'">'+(t.reason?'阻塞：'+esc(typeof t.reason==='string'?t.reason:JSON.stringify(t.reason))+(g?' · ':'') : '')+esc(g||'—')+'</td></tr>';
+    return '<tr data-i="'+i+'" aria-selected="'+(i===selected)+'"><td class="id">'+esc(t.id)+depBar(t,byId)+'</td><td><i class="dot" style="background:'+colors[t.status]+'"></i>'+labels[t.status]+'</td><td class="num">'+(t.priority??'—')+'</td><td>'+esc(t.desc||t.description||'未填写')+'</td><td>'+deps+'</td><td class="id">'+esc(t.verify||'未填写')+'</td><td class="'+(g.startsWith('门禁')?'warn':'')+'">'+(t.reason?'阻塞：'+esc(typeof t.reason==='string'?t.reason:JSON.stringify(t.reason))+(g?' · ':'') : '')+esc(g||'—')+'</td></tr>';
   }).join('')||'<tr><td colspan="7">暂无匹配任务。L 载入当前项目，R 刷新。</td></tr>';
+  const current=rows[selected];
+  if($('detail')){
+    if(!current) $('detail').innerHTML='<p class="hint">没有选中任务</p>';
+    else {
+      const g=gate(current);
+      $('detail').innerHTML='<p class="id">'+esc(current.id)+'</p><p>'+labels[current.status]+' · 优先级 '+(current.priority??'—')+'</p><p>'+esc(current.desc||current.description||'未填写')+'</p><p class="id">'+esc(current.verify||'未填写验证')+'</p><p class="'+(g.startsWith('门禁')?'warn':'')+'">'+esc(g||'无门禁缺口')+'</p>';
+    }
+  }
   const verdict={pass:'通过',fail:'未通过'};
   const events=[...model.evidence.map(x=>({...x,kind:'e'})),...model.reviews.map(x=>({...x,kind:'r'}))].sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||''))).slice(0,8);
   $('events').innerHTML=events.map(x=>'<div class="event"><b>'+(x.kind==='e'?'证据':'评审')+' · <span class="id">'+esc(x.task||'—')+'</span></b><small>'+(x.kind==='e'?'退出码 '+esc(x.exit??'未知'):(verdict[x.verdict]||'未知')+' · '+esc(x.reviewer_context||'未记录上下文'))+'</small><small class="ts">'+esc(x.ts||'未记录时间')+'</small></div>').join('')||'<p class="hint">暂无证据或评审</p>';
@@ -228,8 +332,9 @@ function showEmpty(message){
 function guarded(fn){
   const run=chain.then(async()=>{
     $('refresh').disabled=true;$('load').disabled=true;
+    document.body?.classList?.add('is-loading');
     try{await fn();}catch(e){status('读取失败：'+e.message,true);}
-    finally{$('refresh').disabled=false;$('load').disabled=false;}
+    finally{$('refresh').disabled=false;$('load').disabled=false;document.body?.classList?.remove('is-loading');}
   });
   chain=run.catch(()=>{});
   return run;
@@ -256,6 +361,7 @@ $('refresh').onclick=refreshProject;
 $('search').addEventListener('input',render);
 $('tools').addEventListener('click',e=>{const b=e.target.closest('[data-filter]'); if(!b)return; filter=b.dataset.filter; render();});
 $('tools').addEventListener('change',e=>{if(e.target.id==='sort'){sortBy=e.target.value; render();}});
+$('rail-filters').addEventListener('click',e=>{const b=e.target.closest('[data-filter]'); if(!b)return; filter=b.dataset.filter; render();});
 document.querySelector('.table-wrap').addEventListener('click',e=>{
   const tr=e.target.closest('tr[data-i]');
   if(!tr) return;
