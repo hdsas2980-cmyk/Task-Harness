@@ -20,6 +20,7 @@ trap cleanup EXIT
 mkdir -p "$STAGE"
 cp "$REPO_DIR/SKILL.md" "$STAGE/"
 cp -R "$REPO_DIR/references" "$STAGE/"
+find "$STAGE" -type d -name "__pycache__" -prune -exec rm -rf {} +
 mv "$STAGE" "$TARGET"
 trap - EXIT
 echo "[OK] Codex Skill -> $TARGET"

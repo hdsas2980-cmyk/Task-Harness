@@ -21,7 +21,7 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 
 1. **当前 Codex 任务 = 一轮**：默认只推进一个任务；不要在同一轮顺手处理邻近任务。
 2. **状态外置**：项目根或 `.harness/` 保存 `tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
-3. **最小读取**：先运行 `references/templates/init.ps1` 或 `bash references/templates/init.sh`；随后只读当前任务、依赖任务的结论和任务触及的代码。
+3. **最小读取**：按下方“项目看板”运行初始化，读取紧凑摘要；随后只读当前任务、依赖结论和触及的代码。
 4. **工具原生优先**：在 Windows/Codex 上优先使用 PowerShell 和现有本地工具；已有测试、构建、格式化工具优先于新增依赖。
 5. **评审隔离**：实现者不能充当独立评审者。优先使用另一个 Codex 上下文/评审任务；无法获得独立上下文时必须如实记为 `blocked`，不可把同一轮自检冒充独立评审。
 6. **不伪造完成**：没有可重放证据、评审契约或依据不足时，状态只能是 `evidence_ready`、`blocked` 或回到 `active`。
@@ -37,12 +37,14 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 
 ## 状态机
 
+页面显示中文，JSON 仍使用英文枚举。
+
 ```text
-pending → active → evidence_ready → passed
+pending（待处理） → active（进行中） → evidence_ready（待独立评审） → passed（已通过）
                         │              │
-                        └─(评审 fail)→ active（带新证据重试）
-   任意态 → blocked（结构化阻塞，记录 reason）
-   passed → regressed（依赖变更导致失效，回 active）
+                        └─(评审未通过)→ active（进行中，带新证据重试）
+   任意态 → blocked（已阻塞，记录 reason）
+   passed → regressed（需回归，依赖变更导致失效，回 active）
 ```
 
 ## 三相流程
@@ -53,6 +55,7 @@ pending → active → evidence_ready → passed
 2. 创建 `tasks.json`：稳定 `id`、`priority`、一句话 `desc`、`depends_on`、可执行 `verify`、`status`。
 3. 按 `references/review/spec-review.md` 做规格评审，检查依赖环、路径归属、命令可执行性和工程原则。
 4. 设计评审结论追加到 `progress.txt`；不要把评审意见只留在对话里。
+5. 编排落盘后必须再次运行初始化生成看板，自动打开项目 `.harness/task-harness.html`。
 
 ### 相 2 · 执行（每个 Codex 任务）
 
@@ -60,7 +63,7 @@ pending → active → evidence_ready → passed
 2. 只把一个 eligible 任务置为 `active`；修改前先确认范围和回滚点。
 3. 只读该任务及其触及的代码，采用最小改动完成实现。
 4. 执行任务的 `verify`；将命令、退出码、测试摘要、代码 revision 和时间追加到 `evidence.jsonl`。
-5. 将任务置为 `evidence_ready`，输出 `HARNESS_STATUS` 状态块，然后停止本轮。
+5. 将任务置为 `evidence_ready`，重新初始化刷新看板快照（`-NoOpen` / `--no-open`），输出 `HARNESS_STATUS` 状态块，然后停止本轮。
 
 ### 相 3 · 评审（独立 Codex 上下文）
 
@@ -116,6 +119,19 @@ pending → active → evidence_ready → passed
 - `progress.txt`：追加式叙事日志，只读取最后一段恢复背景。
 - `references/templates/init.ps1`：Windows/Codex 原生初始化脚本。
 - `references/templates/init.sh`：Git Bash/Linux/macOS 兼容初始化脚本。
+- `references/templates/task-harness.html.template` + `render_dashboard.py`：模板与生成器，生成产物在项目 `.harness/task-harness.html`。
+
+## 项目看板
+
+依赖 Python 3（仅标准库）。使用技能绝对路径调用，不把工作目录切到 skill 目录。
+
+- Windows：`& "<skill>/references/templates/init.ps1" -ProjectDir "<项目绝对路径>"`；兼容旧参数 `-HarnessDir`。
+- Git Bash/Linux/macOS：`bash "<skill>/references/templates/init.sh" "<项目绝对路径>"`。
+- 输入为项目根或 `.harness`；旧版根目录 `tasks.json` 保持原位读取，不迁移。初始无任务也创建空白看板，不创建示例任务。
+- 编排完成首次自动打开；后续初始化仅更新快照。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`。Codex 内优先用浏览器面板打开输出的 `DASHBOARD` 路径；无界面环境记录路径，不声称已打开。
+- 更新任务、证据、评审、日志后重新初始化。每次原子替换派生 HTML，绝不写任务真相源。
+- 双击页面查看生成时快照；刷新按钮重载最新生成的 HTML。实时磁盘更新需授权选择任务目录或通过本地 HTTP 打开，可开启每 5 秒刷新。不支持目录授权时重新选择文件，不得宣称离线网页可绕过授权读取文件。
+- 页面状态中文，JSON 枚举仍保持英文；已通过只表示任务声明，缺少关联证据及评审必须显示门禁缺口，不代替独立评审。
 
 ## 修改任务定义
 

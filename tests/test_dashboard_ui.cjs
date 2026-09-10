@@ -1,0 +1,36 @@
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const html = fs.readFileSync(path.join(__dirname,'../references/templates/task-harness.html.template'),'utf8');
+const code = html.match(/<script>\n([\s\S]*?)<\/script>/)[1];
+const tasks = {project:'测试项目',tasks:[{id:'a',desc:'<img src=x onerror=alert(1)>',status:'passed',depends_on:[]},{id:'b',status:'pending',depends_on:['a']}]};
+const snapshot={files:{'tasks.json':JSON.stringify(tasks)},project:'测试',generated:new Date().toISOString(),base:'./'};
+const nodes = new Map();
+function node(id){if(!nodes.has(id))nodes.set(id,{textContent:'',innerHTML:'',value:'',checked:false,disabled:false,classList:{toggle(){},add(){},remove(){}},addEventListener(){},insertAdjacentHTML(_,text){this.innerHTML+=text;},click(){this.clicked=true;}});return nodes.get(id);}
+node('snapshot').textContent=JSON.stringify(snapshot);node('filter').value='all';node('sort').value='priority';
+let reloads=0;
+const scope={document:{getElementById:node,hidden:false},window:{},location:{protocol:'file:',href:'file:///test.html',reload(){reloads++;}},URL,console,setInterval(){},fetch(){throw Error('Unexpected fetch');}};
+vm.createContext(scope);vm.runInContext(code,scope);
+assert.match(node('tasks').innerHTML,/已通过/);
+assert.match(node('tasks').innerHTML,/完成门禁缺口/);
+assert.match(node('tasks').innerHTML,/&lt;img/);
+assert.doesNotMatch(node('tasks').innerHTML,/<img/);
+assert.match(node('status').textContent,/任务快照/);
+node('search').value='b';vm.runInContext('render()',scope);assert.doesNotMatch(node('tasks').innerHTML,/<strong>a<\/strong>/);node('search').value='';
+const before=vm.runInContext('JSON.stringify(model)',scope);
+assert.throws(()=>vm.runInContext('install({"tasks.json":"{bad"},"错误")',scope));
+assert.equal(vm.runInContext('JSON.stringify(model)',scope),before);
+assert.throws(()=>vm.runInContext('parse({"tasks.json":JSON.stringify({tasks:[{id:"x",status:"bad"}]})})',scope));
+assert.throws(()=>vm.runInContext('parse({"tasks.json":JSON.stringify({tasks:[]}),"reviews.jsonl":"[]"})',scope));
+(async()=>{
+ await node('refresh').onclick();assert.equal(reloads,1);
+ vm.runInContext('mode="manual"',scope);await node('refresh').onclick();assert.equal(node('files').clicked,true);assert.equal(reloads,1);
+ node('auto').checked=true;node('auto').onchange();assert.equal(node('auto').checked,false);
+ scope.fetch=async url=>({ok:true,status:200,text:async()=>String(url).endsWith('tasks.json')?JSON.stringify({tasks:[{id:'updated',status:'active'}]}):''});
+ vm.runInContext('mode="http"',scope);await node('refresh').onclick();assert.match(node('tasks').innerHTML,/updated/);
+ scope.fetch=async()=>({ok:false,status:500});await node('refresh').onclick();assert.match(node('status').textContent,/读取失败/);assert.match(node('tasks').innerHTML,/updated/);
+ vm.runInContext('directory={getFileHandle:async n=>({getFile:async()=>({text:async()=>n==="tasks.json"?JSON.stringify({tasks:[{id:"directory-task",status:"blocked"}]}):""})})}',scope);
+ await node('refresh').onclick();assert.match(node('tasks').innerHTML,/directory-task/);
+ console.log('UI logic: 16 assertions passed (mock DOM; not browser visual verification)');
+})().catch(e=>{console.error(e);process.exitCode=1;});

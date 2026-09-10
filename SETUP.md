@@ -32,24 +32,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 ## 项目初始化
 
-建议把运行状态放到项目 `.harness/`，不要把大日志放进对话上下文：
+不要单独复制 init.ps1；它需要同目录的生成器与模板。通过已安装技能绝对路径调用：
 
 ```powershell
-New-Item -ItemType Directory -Force .harness | Out-Null
-Copy-Item <repo>\references\templates\tasks.json .harness\tasks.json
-Copy-Item <repo>\references\templates\progress.txt .harness\progress.txt
-Copy-Item <repo>\references\templates\evidence.jsonl .harness\evidence.jsonl
-Copy-Item <repo>\references\templates\reviews.jsonl .harness\reviews.jsonl
-Copy-Item <repo>\references\templates\init.ps1 .harness\init.ps1
+$skill = Join-Path $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }) "skills/task-harness"
+& (Join-Path $skill "references/templates/init.ps1") -ProjectDir (Get-Location).Path
 ```
 
-每一轮在项目根执行：
+初始化自动创建 `.harness/task-harness.html`。完成 tasks.json 编排后再次调用，首次自动打开项目页面；之后仅更新快照。可用 `-Open` 重新打开，测试用 `-NoOpen`。不创建示例任务，不修改任务真相源。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\.harness\init.ps1 -HarnessDir (Get-Location).Path
+每次更新任务、证据、评审或日志后重新调用以刷新内嵌快照。双击 HTML 即可查看；实时读取需授权选择目录或通过 HTTP 打开。完整说明见 SKILL.md 的“项目看板”。
+
+Git Bash/Linux/macOS：
+
+```bash
+bash "$HOME/.codex/skills/task-harness/references/templates/init.sh" "$PWD"
 ```
-
-脚本只输出进度、待评审/阻塞项和一个 eligible 任务。
 
 ## 评审
 

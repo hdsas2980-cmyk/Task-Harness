@@ -20,6 +20,7 @@ try {
   New-Item -ItemType Directory -Force -Path $Stage | Out-Null
   Copy-Item -LiteralPath (Join-Path $RepoDir 'SKILL.md') -Destination $Stage
   Copy-Item -LiteralPath (Join-Path $RepoDir 'references') -Destination $Stage -Recurse
+  Get-ChildItem -LiteralPath $Stage -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
   Move-Item -LiteralPath $Stage -Destination $Target
   Write-Host "[OK] Codex Skill -> $Target"
   Write-Host "[INFO] 未安装 commands/；未访问 .cc-switch 和 .claude。"

@@ -6,7 +6,7 @@
 
 你在一个 Codex 工作轮次中，只推进一个 Harness 任务。先做：
 
-1. 在项目根运行 `.harness/init.ps1`（Windows）或 `.harness/init.sh`（Git Bash/Linux/macOS）；
+1. 按 SKILL.md“项目看板”以项目绝对路径运行技能初始化脚本，保持项目工作目录；
 2. 只选择一个依赖已满足、优先级最高的 `pending` 或 `regressed` 任务；
 3. 读取该任务、必要依赖结论、任务声明路径和必要代码，不读取全量旧日志；
 4. 将该任务置为 `active`，按 ponytail 阶梯选择最小实现；

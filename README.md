@@ -46,34 +46,26 @@ bash scripts/install.sh
 
 ## 使用
 
-在项目中初始化 `.harness/`，复制 `references/templates/` 的模板，然后每个 Codex 任务先运行：
+安装到 `$CODEX_HOME/skills/task-harness` 后，每个 Codex 任务先按下方“项目看板”用技能绝对路径初始化。不要把工作目录切到 skill，也不要把 `init.ps1` 单独复制到项目——它依赖同目录的生成器与模板。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File <绝对路径>\references\templates\init.ps1
-```
-
-或：
-
-```bash
-bash <绝对路径>/references/templates/init.sh
-```
+状态文件建议放在项目 `.harness/`：`tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
 
 具体规则见 `SKILL.md`、`references/codex-adapter.md` 和 `references/review/`。
 
-## 任务可视化（单 HTML）
+## 项目看板
 
-仓库提供零依赖的状态查看器：`references/visualizer/task-harness.html`。把该文件复制到项目中，或直接在浏览器打开。它支持：
+依赖 Python 3（仅标准库）。使用技能绝对路径调用，不把工作目录切到 skill 目录。
 
-- 选择或拖放 `.harness/tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`；
-- 通过本地 HTTP 服务打开时，自动尝试加载当前目录的 `.harness/` 文件；
-- 按状态、优先级、任务 ID 搜索和排序；
-- 展示任务依赖、完成度、证据和独立评审摘要；
-- 所有数据只在浏览器本地读取，不上传任务内容。
+- Windows：`& "<skill>/references/templates/init.ps1" -ProjectDir "<项目绝对路径>"`；兼容旧参数 `-HarnessDir`。
+- Git Bash/Linux/macOS：`bash "<skill>/references/templates/init.sh" "<项目绝对路径>"`。
+- 输入为项目根或 `.harness`；旧版根目录 `tasks.json` 保持原位读取，不迁移。初始无任务也创建空白看板，不创建示例任务。
+- 编排完成首次自动打开；后续初始化仅更新快照。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`。Codex 内优先用浏览器面板打开输出的 `DASHBOARD` 路径；无界面环境记录路径，不声称已打开。
+- 更新任务、证据、评审、日志后重新初始化。每次原子替换派生 HTML，绝不写任务真相源。
+- 双击页面查看生成时快照；刷新按钮重载最新生成的 HTML。实时磁盘更新需授权选择任务目录或通过本地 HTTP 打开，可开启每 5 秒刷新。不支持目录授权时重新选择文件，不得宣称离线网页可绕过授权读取文件。
+- 页面状态中文，JSON 枚举仍保持英文；已通过只表示任务声明，缺少关联证据及评审必须显示门禁缺口，不代替独立评审。
 
-直接打开本地文件时使用“选择状态文件”即可。若希望自动读取 `.harness/`，可在项目根目录启动本地静态服务器，例如：
+通过 HTTP 使用时，在项目根运行 `python -m http.server 8000 --bind 127.0.0.1`，访问 `http://127.0.0.1:8000/.harness/task-harness.html`。
 
-```powershell
-python -m http.server 8000
-```
+技能只携带模板和生成器。`.harness/task-harness.html` 与 `.dashboard-opened` 为项目派生产物。初始化不创建任务定义；文件损坏时报错并保留上次有效 HTML。
 
-然后访问 `http://localhost:8000/references/visualizer/task-harness.html`。状态文件仍然是 Harness 的唯一真相源，HTML 只负责可视化，不会修改任务状态。
+测试：`python -m unittest discover -s tests -v`。测试通过不等于独立评审通过。
