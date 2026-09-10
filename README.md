@@ -59,3 +59,21 @@ bash <绝对路径>/references/templates/init.sh
 ```
 
 具体规则见 `SKILL.md`、`references/codex-adapter.md` 和 `references/review/`。
+
+## 任务可视化（单 HTML）
+
+仓库提供零依赖的状态查看器：`references/visualizer/task-harness.html`。把该文件复制到项目中，或直接在浏览器打开。它支持：
+
+- 选择或拖放 `.harness/tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`；
+- 通过本地 HTTP 服务打开时，自动尝试加载当前目录的 `.harness/` 文件；
+- 按状态、优先级、任务 ID 搜索和排序；
+- 展示任务依赖、完成度、证据和独立评审摘要；
+- 所有数据只在浏览器本地读取，不上传任务内容。
+
+直接打开本地文件时使用“选择状态文件”即可。若希望自动读取 `.harness/`，可在项目根目录启动本地静态服务器，例如：
+
+```powershell
+python -m http.server 8000
+```
+
+然后访问 `http://localhost:8000/references/visualizer/task-harness.html`。状态文件仍然是 Harness 的唯一真相源，HTML 只负责可视化，不会修改任务状态。
