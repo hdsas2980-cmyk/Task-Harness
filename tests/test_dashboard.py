@@ -2,8 +2,11 @@ import contextlib
 import importlib.util
 import io
 import json
+import socket
+import threading
 import urllib.error
 import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import tempfile
 import unittest
@@ -156,6 +159,53 @@ class DashboardTests(unittest.TestCase):
         second = self.meta(out)
         self.assertEqual(first["port"], second["port"])
         self.assertEqual(first["pid"], second["pid"])
+
+    def free_port_block(self, span=6):
+        """占用一段连续空闲端口的首个，返回 (blocker, lo, hi)。"""
+        class Other(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                return
+
+            def do_GET(self):
+                body = b'{"project":"other","rev":1,"tasks":[]}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        for lo in range(18900, 19100, 10):
+            hi = lo + span - 1
+            probes = []
+            try:
+                for port in range(lo, hi + 1):
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.bind(("127.0.0.1", port))
+                    probes.append(sock)
+            except OSError:
+                continue
+            finally:
+                for sock in probes:
+                    sock.close()
+            blocker = ThreadingHTTPServer(("127.0.0.1", lo), Other)
+            self.addCleanup(blocker.server_close)
+            self.addCleanup(blocker.shutdown)
+            threading.Thread(target=blocker.serve_forever, daemon=True).start()
+            return blocker, lo, hi
+        self.skipTest("找不到连续空闲端口段")
+        return None, 0, 0
+
+    def test_occupied_port_is_not_hijacked(self):
+        """端口被别的项目看板占用时，必须换端口而不是复用对方的地址。"""
+        _blocker, lo, hi = self.free_port_block()
+        with patch.object(dashboard, "PORT_MIN", lo), patch.object(dashboard, "PORT_MAX", hi):
+            self.tasks(desc="本项目任务")
+            out = self.run_serve(no_open=True)
+            meta = self.meta(out)
+            self.assertNotEqual(meta["port"], lo)
+            status, body = fetch("http://127.0.0.1:%s/tasks.json" % meta["port"])
+            self.assertEqual(status, 200)
+            self.assertEqual(body, (out.parent / "tasks.json").read_bytes())
 
     def test_packaging(self):
         self.assertTrue((ROOT / "references/templates/task-harness.html").exists())

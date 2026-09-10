@@ -130,6 +130,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 - Git Bash/Linux/macOS：`bash "<skill>/references/templates/init.sh" "<项目绝对路径>"`。
 - 输入为项目根或 `.harness`；旧版根目录 `tasks.json` 保持原位读取，不迁移。初始无任务也复制空白看板并启动服务，不创建示例任务，不自动打开浏览器。
 - 技能只携带一份静态 SPA。初始化把它复制到项目 `.harness/task-harness.html`（覆盖页面以便技能更新生效），然后在 `127.0.0.1:8765-8799` 启动只读 HTTP；输出 `DASHBOARD: http://127.0.0.1:<port>/task-harness.html`。
+- 端口独占本项目 source：候选端口若已被其他项目的看板占用则自动换端口，绝不复用他人地址；复用已有服务前也会校验该端口返回的 `tasks.json` 与本项目一致。
 - 编排完成首次自动用该 URL 打开；后续初始化复用已有端口。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`（仍启动/复用服务并打印 URL）。Codex 内用浏览器面板打开 `DASHBOARD` 的 http 地址，不要打开 `file://`。无界面环境只记录 URL。
 - 更新任务、证据、评审、日志后重新初始化或在页面点「刷新任务」。服务只暴露看板和 `tasks.json` / `evidence.jsonl` / `reviews.jsonl` / `progress.txt`，绝不写任务真相源。
 - 「载入任务」「刷新任务」只 fetch 当前项目 harness 文件，不打开资源管理器，不使用目录选择器。`file://` 无法读取实时任务，必须通过 `http://127.0.0.1` 打开。

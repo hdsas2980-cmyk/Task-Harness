@@ -173,7 +173,8 @@ def stop_pid(pid):
     if not isinstance(pid, int) or pid <= 0:
         return
     if os.name == "nt":
-        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, text=True)
+        # taskkill 在中文 Windows 上输出 GBK；不加 errors 会让读取线程抛 UnicodeDecodeError。
+        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, errors="replace")
     else:
         try:
             os.kill(pid, signal.SIGTERM)
@@ -188,6 +189,39 @@ def dashboard_url(port):
     return "http://127.0.0.1:%s/task-harness.html" % port
 
 
+def port_in_use(port):
+    """探测端口是否已被监听。
+
+    故意不设置 SO_REUSEADDR：Windows 下带上该选项时，即使端口已被别的进程
+    LISTEN，bind() 依然会成功，从而误判端口空闲并复用其他项目的看板端口。
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", port))
+        return False
+    except OSError:
+        return True
+    finally:
+        sock.close()
+
+
+def serves_source(url, source):
+    """确认该端口上的服务暴露的确实是本次的 source，而非其他项目。
+
+    仅靠 http_ok 无法区分"自己的服务"和"恰好占用该端口、服务于别的项目"。
+    """
+    target = Path(source) / "tasks.json"
+    base = url.rsplit("/", 1)[0]
+    try:
+        with local_urlopen(base + "/tasks.json", timeout=1) as resp:
+            body = resp.read()
+    except urllib.error.HTTPError as err:
+        return err.code == 404 and not target.is_file()
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return False
+    return target.is_file() and body == target.read_bytes()
+
+
 def reuse_server(output, source):
     meta = load_meta(output)
     if not meta:
@@ -200,7 +234,7 @@ def reuse_server(output, source):
             stop_pid(pid)
         return None
     url = dashboard_url(port)
-    if pid_alive(pid) and http_ok(url):
+    if pid_alive(pid) and http_ok(url) and serves_source(url, source):
         return url
     if pid_alive(pid):
         stop_pid(pid)
@@ -267,14 +301,8 @@ def spawn_server(output, source):
         return reused
     script = str(Path(__file__).resolve())
     for port in range(PORT_MIN, PORT_MAX + 1):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind(("127.0.0.1", port))
-        except OSError:
-            sock.close()
+        if port_in_use(port):
             continue
-        sock.close()
         cmd = [sys.executable, script, "--listen", "--port", str(port), "--output", str(output), "--source", str(source)]
         kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
         if os.name == "nt":
@@ -288,7 +316,7 @@ def spawn_server(output, source):
         while time.time() < deadline:
             if proc.poll() is not None:
                 break
-            if http_ok(url):
+            if http_ok(url) and serves_source(url, source):
                 save_meta(output, {"port": port, "pid": proc.pid, "source": str(source), "output": str(output)})
                 # Intentionally detach: parent must not kill or warn about the listener.
                 if proc.returncode is None:
