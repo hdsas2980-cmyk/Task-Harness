@@ -1,7 +1,11 @@
-﻿param(
+param(
   [string]$HarnessDir = (Get-Location).Path
 )
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'$HarnessDir = (Resolve-Path -LiteralPath $HarnessDir).Path
+if((Split-Path -Leaf $HarnessDir) -ne '.harness'){ $HarnessDir = Join-Path $HarnessDir '.harness'; New-Item -ItemType Directory -Force -Path $HarnessDir | Out-Null }
+$visualizer = Join-Path $HarnessDir 'task-harness.html'
+$template = Join-Path $PSScriptRoot 'task-harness.html'
+if((Test-Path -LiteralPath $template) -and (-not (Test-Path -LiteralPath $visualizer))){ Copy-Item -LiteralPath $template -Destination $visualizer -Force }
 $HarnessDir = (Resolve-Path -LiteralPath $HarnessDir).Path
 $tasksPath = Join-Path $HarnessDir 'tasks.json'
 if(-not (Test-Path -LiteralPath $tasksPath -PathType Leaf)){
@@ -50,4 +54,8 @@ if($tasks.Count -gt 0 -and $passed.Count -eq $tasks.Count){
 }
 Write-Output ''
 Write-Output '提醒: 只推进这一个任务；完成后追加 evidence.jsonl、置 evidence_ready，并输出 HARNESS_STATUS。'
+
+
+if(Test-Path -LiteralPath $visualizer){ try { Start-Process -FilePath $visualizer } catch { Write-Output ('无法自动打开可视化页面: ' + $_.Exception.Message) } }
+
 
