@@ -1,5 +1,5 @@
-# 长任务看板（独立项目，不随 skill 安装）
-# UTF-8。Windows 控制台先切 65001，再交给 python -X utf8。
+﻿# Independent task board launcher. Keep this file ASCII so Windows
+# PowerShell 5.1 can parse it even without a UTF-8 BOM.
 [CmdletBinding()]
 param(
   [Alias('HarnessDir')][string]$ProjectDir = '',
@@ -21,15 +21,15 @@ foreach ($candidate in @('python', 'python3', 'py')) {
     if ($LASTEXITCODE -eq 0) { $Python = $candidate; break }
   }
 }
-if (-not $Python) { throw '需要 Python 3（标准库即可）来启动看板。' }
+if (-not $Python) { throw 'Need Python 3 (standard library) to start the board.' }
 
 $Serve = Join-Path $PSScriptRoot 'serve.py'
-if (-not (Test-Path -LiteralPath $Serve)) { throw "缺少 $Serve" }
+if (-not (Test-Path -LiteralPath $Serve)) { throw "Missing $Serve" }
 
 $Arguments = @('-X', 'utf8', $Serve)
 if ($ProjectDir) { $Arguments += $ProjectDir }
 if ($Port -gt 0) { $Arguments += @('--port', "$Port") }
 if ($NoOpen) { $Arguments += '--no-open' }
-Write-Host "启动看板..."
+Write-Host 'Starting board...'
 & $Python @Arguments
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

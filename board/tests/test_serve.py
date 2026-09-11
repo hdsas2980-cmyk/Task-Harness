@@ -169,5 +169,11 @@ class BoardServeTests(unittest.TestCase):
             httpd.server_close()
 
 
+    def test_start_ps1_is_ascii(self):
+        raw = (ROOT / "start.ps1").read_bytes()
+        if raw.startswith(b"\xef\xbb\xbf"):
+            raw = raw[3:]
+        raw.decode("ascii")
+
 if __name__ == "__main__":
     unittest.main()

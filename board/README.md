@@ -6,7 +6,7 @@
 
 ## 启动（Windows，注意编码）
 
-脚本按 UTF-8 运行：`chcp 65001` + `PYTHONUTF8=1` + `python -X utf8`。
+脚本按 UTF-8 运行：chcp 65001 + PYTHONUTF8=1 + python -X utf8。start.ps1 只用 ASCII（带 UTF-8 BOM），避免 Windows PowerShell 5.1 按系统代码页把中文拆成语法错误。
 
 ```bat
 board\start.bat
