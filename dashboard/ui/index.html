@@ -432,7 +432,7 @@ nav[aria-label="任务视图"] button .nav-txt em{font:400 11px/1.3 var(--sans);
       <input class="search" id="search" type="search" aria-label="搜索任务" placeholder="搜索编号、描述、验证命令">
     </label>
     <button class="btn" id="events-open" type="button">证据与评审</button>
-    <button class="btn btn-solid" id="load" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 20h15"/></svg title="选择项目任务目录">载入任务 <kbd>L</kbd></button>
+    <button class="btn btn-solid" id="load" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 20h15"/></svg>载入任务 <kbd>L</kbd></button>
     <button class="btn" id="refresh" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1M20.5 4.2v5h-5"/></svg>刷新任务 <kbd>R</kbd></button>
   </header>
 
@@ -695,6 +695,10 @@ function renderGantt(rows){
   }).join('');
 }
 function render(){
+  try{ renderAll(); }
+  catch(e){ status('界面刷新失败：' + ((e && e.message) || e || '未矡错误'), true); }
+}
+function renderAll(){
   const all = model.tasks.tasks;
   const counts = Object.fromEntries(states.map(s=>[s, all.filter(t=>t.status === s).length]));
   const byId = new Map(all.map(t=>[t.id,t]));
@@ -836,8 +840,6 @@ function showEmpty(message){
 function guarded(fn){
   const run = chain.then(async()=>{
     const r = $('refresh'), l = $('load');
-    if(r) r.disabled = true;
-    if(l) l.disabled = true;
     try{ await fn(); }
     catch(e){ status('读取失败：' + ((e && e.message) || e || '未知错误'), true); }
     finally{
@@ -1026,7 +1028,7 @@ document.addEventListener('keydown', e=>{
 render();
 setDirLabel('');
 if(isTauri()){
-  guarded(async()=>{
+  (async()=>{
     let last = '';
     try{ last = localStorage.getItem('task-harness.lastDir') || ''; }catch(e){}
     let probed = '';
@@ -1046,7 +1048,7 @@ if(isTauri()){
       }
     }
     status('当前目录没有任务，点「载入任务」选择项目任务目录');
-  });
+  })().catch(e=>status('启动载入失败：' + ((e && e.message) || e || '未矡错误'), true));
 }else if(isLocalFile()){
   status(localFileHint(), !canPickDir());
 }else{

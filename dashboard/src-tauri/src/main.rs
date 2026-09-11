@@ -5,8 +5,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use tauri::{AppHandle, WebviewWindow};
-use tauri_plugin_dialog::DialogExt;
 
 #[derive(Serialize)]
 struct HarnessPayload {
@@ -46,26 +44,19 @@ fn probe_candidates() -> Vec<PathBuf> {
     out
 }
 
-fn picked_path_to_string(path: tauri_plugin_dialog::FilePath) -> Result<String, String> {
-    path.into_path()
-        .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|err| err.to_string())
-}
-
 #[tauri::command]
-async fn pick_harness_dir(app: AppHandle, window: WebviewWindow) -> Result<Option<String>, String> {
-    // async command runs off the UI thread; blocking_pick_folder on the main
-    // thread deadlocks the Win32 dialog and looks like "click does nothing".
-    let picked = app
-        .dialog()
-        .file()
-        .set_parent(&window)
-        .set_title("选择项目任务目录")
-        .blocking_pick_folder();
-    match picked {
-        Some(path) => Ok(Some(picked_path_to_string(path)?)),
-        None => Ok(None),
-    }
+async fn pick_harness_dir() -> Result<Option<String>, String> {
+    // Native IFileDialog on a worker STA thread.
+    // tauri-plugin-dialog::blocking_pick_folder on the UI thread deadlocks Win32
+    // and freezes the whole webview, so tabs and the status rail stop clicking.
+    let picked = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("选择项目任务目录")
+            .pick_folder()
+    })
+    .await
+    .map_err(|err| err.to_string())?;
+    Ok(picked.map(|path| path.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
@@ -106,7 +97,6 @@ fn read_harness(path: String) -> Result<HarnessPayload, String> {
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             pick_harness_dir,
             probe_harness_dir,
