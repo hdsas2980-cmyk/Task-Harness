@@ -1,9 +1,9 @@
 ---
 name: task-harness
-description: 长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，主会话上下文不随任务数增长。这是宿主无关的核心协议；安装到具体 ADE 请用对应分支。
+description: WorkBuddy 专用长时任务骨架。一轮一任务、状态落盘、证据加独立评审判定完成。安装到 ~/.workbuddy/skills/task-harness。
 ---
 
-# task-harness v3.1 — Core
+# task-harness v3.1 — WorkBuddy
 
 ## 定位
 
@@ -15,7 +15,14 @@ description: 长时运行任务的最小骨架。一轮一任务、状态落盘�
 
 状态全部落盘。主会话只读取当前任务和它触及的文件，不随任务数量回读历史。宁可骨架简陋，不可问责缺失：不因「精简」砍掉验证、安全、错误处理和可回滚性。
 
-要装进 Claude Code / Codex / TRAE / WorkBuddy / DSH，请检出对应宿主分支。分支表见仓库根 `BRANCHES.md`。
+本版本是 **WorkBuddy 适配**。安装只写 `~/.workbuddy/skills/task-harness`（可用 `WORKBUDDY_HOME` 覆盖）。不写入 Claude / Codex / TRAE / DSH。
+
+## WorkBuddy 运行契约
+
+1. 当前 WorkBuddy 会话 = 一轮：只推进一个任务。
+2. 状态外置到项目 `.harness/`。
+3. 独立评审必须新开一个 WorkBuddy 会话；不能在实现会话里给自己 `pass`。
+4. 技能目录是单层 `skills/<name>/SKILL.md`，不要把其他宿主的 `commands/` 拷进来。
 
 ## 核心不变式
 
