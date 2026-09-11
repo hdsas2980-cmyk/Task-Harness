@@ -21,7 +21,7 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 
 1. **当前 Codex 任务 = 一轮**：默认只推进一个任务；不要在同一轮顺手处理邻近任务。
 2. **状态外置**：项目根或 `.harness/` 保存 `tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
-3. **最小读取**：按下方“项目看板”运行初始化，读取紧凑摘要；随后只读当前任务、依赖结论和触及的代码。
+3. **最小读取**：读 `.harness/tasks.json`（或根目录 `tasks.json`）与 `progress.txt` 末段；随后只读当前任务、依赖结论和触及的代码。不要为了看板去跑 HTTP。
 4. **工具原生优先**：在 Windows/Codex 上优先使用 PowerShell 和现有本地工具；已有测试、构建、格式化工具优先于新增依赖。
 5. **评审隔离**：实现者不能充当独立评审者。优先使用另一个 Codex 上下文/评审任务；无法获得独立上下文时必须如实记为 `blocked`，不可把同一轮自检冒充独立评审。
 6. **不伪造完成**：没有可重放证据、评审契约或依据不足时，状态只能是 `evidence_ready`、`blocked` 或回到 `active`。
@@ -68,15 +68,15 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 2. 创建 `tasks.json`：稳定 `id`、`priority`、一句话 `desc`、`depends_on`、可执行 `verify`、`status`。
 3. 按 `references/review/spec-review.md` 做规格评审，检查依赖环、路径归属、命令可执行性和工程原则。
 4. 设计评审结论追加到 `progress.txt`；不要把评审意见只留在对话里。
-5. 编排落盘后必须再次运行初始化：复制独立看板页面，并在 `http://127.0.0.1` 打开。
+5. 编排落盘即可。可视化看板是独立目录，不随技能安装。
 
 ### 相 2 · 执行（每个 Codex 任务）
 
-1. 运行初始化脚本，读取紧凑状态。
+1. 读取 `tasks.json` 与 `progress.txt` 末段，得到当前 eligible 任务。
 2. 只把一个 eligible 任务置为 `active`；修改前先确认范围和回滚点。
 3. 只读该任务及其触及的代码，采用最小改动完成实现。
 4. 执行任务的 `verify`；将命令、退出码、测试摘要、代码 revision 和时间追加到 `evidence.jsonl`。
-5. 将任务置为 `evidence_ready`，重新初始化以确保看板服务在读当前文件（`-NoOpen` / `--no-open`），输出 `HARNESS_STATUS` 状态块，然后停止本轮。
+5. 将任务置为 `evidence_ready`，输出 `HARNESS_STATUS` 状态块，然后停止本轮。独立看板若已在轮询，会自己看到落盘变化。
 
 ### 相 3 · 评审（独立 Codex 上下文）
 
@@ -104,7 +104,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 
 ## Codex 上下文预算规则
 
-- 启动时只读初始化脚本的摘要，不把 100+ 任务全文塞进上下文。
+- 启动时只读 `tasks.json` 必要字段和 `progress.txt` 末段，不把 100+ 任务全文塞进上下文。
 - 任务选择只依赖 `tasks.json` 的必要字段；旧 evidence/review 只按当前 `task` 过滤读取。
 - 大型日志、构建产物、截图、抓包和报告放 `.harness/artifacts/`，在任务里记录路径，不内联全文。
 - 需要跨轮传递的信息写入 `progress.txt` 最后一段；不要依赖聊天历史。
@@ -130,24 +130,19 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 - `evidence.jsonl`：追加 `{id, task, cmd, exit, tests, rev, ts}`，可增加 `artifacts`、`environment`。
 - `reviews.jsonl`：追加 `{id, task, ev, reviewer_context, verdict, ts}`。
 - `progress.txt`：追加式叙事日志，只读取最后一段恢复背景。
-- `references/templates/init.ps1`：Windows/Codex 原生初始化脚本。
-- `references/templates/init.sh`：Git Bash/Linux/macOS 兼容初始化脚本。
-- `references/templates/task-harness.html` + `app.js`：技能携带的静态 Web 看板。
-- `references/templates/serve_dashboard.py`：可选地把 SPA 挂到 `127.0.0.1`，不改任务真相源。
+- `board/`：可视化看板是独立目录，不随技能安装；见上文「可视化看板」。
 
-## 项目看板
+## 可视化看板（独立项目，不随技能安装）
 
-依赖 Python 3（仅标准库）。使用技能绝对路径调用，不把工作目录切到 skill 目录。
+看板不在本技能包内，安装脚本也不会拷贝它。仓库独立目录 `board/` 提供只读 HTTP 页，轮询项目任务目录并自动刷新。
 
-- Windows：`& "<skill>/references/templates/init.ps1" -ProjectDir "<项目绝对路径>"`；兼容旧参数 `-HarnessDir`。
-- Git Bash/Linux/macOS：`bash "<skill>/references/templates/init.sh" "<项目绝对路径>"`。
-- 输入为项目根或 `.harness`；旧版根目录 `tasks.json` 保持原位读取，不迁移。初始无任务也复制空白看板并启动服务，不创建示例任务，不自动打开浏览器。
-- 技能只携带一份静态 SPA。初始化把它复制到项目 `.harness/task-harness.html`（覆盖页面以便技能更新生效），然后在 `127.0.0.1:8765-8799` 启动只读 HTTP；输出 `DASHBOARD: http://127.0.0.1:<port>/task-harness.html`。
-- 端口独占本项目 source：候选端口若已被其他项目的看板占用则自动换端口，绝不复用他人地址；复用已有服务前也会校验该端口返回的 `tasks.json` 与本项目一致。
-- 编排完成首次自动用该 URL 打开；后续初始化复用已有端口。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`（仍启动/复用服务并打印 URL）。Codex 内用浏览器面板打开 `DASHBOARD` 的 http 地址，不要打开 `file://`。无界面环境只记录 URL。
-- 更新任务、证据、评审、日志后重新初始化或在页面点「刷新任务」。服务只暴露看板和 `tasks.json` / `evidence.jsonl` / `reviews.jsonl` / `progress.txt`，绝不写任务真相源。
-- 「载入任务」在浏览器中选择项目任务目录（`.harness` 或项目根）；「刷新任务」重读该目录。脚本初始化会先载入当前 HTTP 项目。没有独立桌面壳。
-- 页面状态中文，JSON 枚举仍保持英文；已通过只表示任务声明，缺少关联证据及评审必须显示门禁缺口，不代替独立评审。
+```powershell
+powershell -ExecutionPolicy Bypass -File .\board\start.ps1 -ProjectDir "<项目绝对路径>"
+```
+
+Windows 乱码：用 `board\start.ps1` / `board\start.bat`（已设 UTF-8 / `chcp 65001` / `python -X utf8`），不要自己再开一套 `python -m http.server`。
+
+技能只读写 `tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。不要把看板 HTML 拷进 `.harness/`，不要为了刷新看板再跑技能脚本。
 
 ## 修改任务定义
 

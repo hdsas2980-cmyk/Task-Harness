@@ -32,22 +32,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 ## 项目初始化
 
-不要单独复制 init.ps1；它需要同目录的 `serve_dashboard.py` 与独立 SPA `task-harness.html`。通过已安装技能绝对路径调用：
+技能不再启动看板。状态文件放在项目 `.harness/`：`tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
+
+可视化看板是独立目录 `board/`，不随技能安装：
 
 ```powershell
-$skill = Join-Path $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }) "skills/task-harness"
-& (Join-Path $skill "references/templates/init.ps1") -ProjectDir (Get-Location).Path
+powershell -ExecutionPolicy Bypass -File .\board\start.ps1 -ProjectDir (Get-Location).Path
 ```
 
-初始化会把独立 SPA 复制到 `.harness/task-harness.html`，并在 `http://127.0.0.1:<port>/task-harness.html` 打开。完成 `tasks.json` 编排后再次调用，首次自动打开该 URL；之后复用本机服务。可用 `-Open` 重新打开，测试用 `-NoOpen`。不创建示例任务，不修改任务真相源。
-
-每次更新任务、证据、评审或日志后重新调用或在页面点「刷新任务」。不要双击 HTML：`file://` 读不到当前项目任务。完整说明见 SKILL.md 的“项目看板”。
-
-Git Bash/Linux/macOS：
-
-```bash
-bash "$HOME/.codex/skills/task-harness/references/templates/init.sh" "$PWD"
-```
+Windows 用该脚本（UTF-8），不要双击 HTML，也不要为了刷新看板再跑技能安装脚本。
 
 ## 评审
 

@@ -25,7 +25,7 @@ HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
 ## 3. 工具选择
 
 - Windows：优先 PowerShell；路径使用绝对路径并在破坏性动作前 `Resolve-Path`；
-- Git Bash/Linux/macOS：使用 `init.sh` 和 POSIX 工具；
+- Git Bash/Linux/macOS：使用 POSIX 工具；可视化看板见独立目录 `board/`；
 - 复用项目已有测试/构建命令，不为 Harness 引入运行时依赖；
 - 大输出写入 `.harness/artifacts/`，证据只记录摘要和路径。
 

@@ -28,7 +28,7 @@ const setText = (id,text) => { const el = $(id); if(el) el.textContent = text; }
 function status(text, error=false){ timers.clear(); setText('status',text); const el = $('status'); if(el && el.classList && el.classList.toggle) el.classList.toggle('err',error); }
 function flash(text){ const el = $('status'); const prev = el ? el.textContent : ''; status(text); timers.set(()=>status(prev), 1600); }
 function isLocalFile(){ return location.protocol === 'file:'; }
-function localFileHint(){ return '点「载入任务」选择项目任务目录（.harness 或项目根）。请用脚本启动 HTTP 看板，不要打开 file://。'; }
+function localFileHint(){ return '请用 board/start.ps1 启动 HTTP 看板，不要打开 file://。点「载入任务」也可选择项目任务目录。'; }
 function parse(texts){
   if(!Object.hasOwn(texts,'tasks.json')) throw Error('缺少任务文件；原任务保持不变');
   let tasks;
@@ -409,14 +409,53 @@ async function loadProject(){ await guarded(async()=>{
     throw e;
   }
 });}
+async function pullLive(){
+  if(dirHandle){
+    const texts = await readFromHandle(dirHandle);
+    if(!texts) throw Error('已选目录里找不到 tasks.json');
+    return texts;
+  }
+  if(isLocalFile()) throw Error(localFileHint());
+  try{
+    const r = await fetch('/api/snapshot', {cache:'no-store'});
+    if(r.ok){
+      const data = await r.json();
+      if(data && data.source) rememberPath(data.source);
+      if(data && data.files && data.files['tasks.json']) return data.files;
+    }
+  }catch(e){}
+  return await fetchHarness();
+}
+function stampOf(texts){
+  return ['tasks.json','evidence.jsonl','reviews.jsonl','progress.txt','board.json']
+    .map(n => (texts && texts[n]) ? texts[n] : '').join('\u0001');
+}
+let lastStamp = '';
+const POLL_MS = 2000;
+let pollTimer = 0;
+function startPoll(){
+  if(isLocalFile()) return;
+  const tick = () => guarded(async()=>{
+    const texts = await pullLive();
+    if(!texts || !texts['tasks.json']) return;
+    const stamp = stampOf(texts);
+    if(stamp === lastStamp) return;
+    lastStamp = stamp;
+    install(texts, '已同步 ' + (selectedPath || '任务目录'));
+  });
+  tick();
+  if(pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(tick, POLL_MS);
+}
 async function refreshProject(){ await guarded(async()=>{
   try{
-    const texts = await rereadSelected();
+    const texts = await pullLive();
     if(!texts){
       if(model.tasks.tasks.length){ status('刷新失败：未找到 tasks.json，已保留上次任务', true); return; }
       showEmpty('尚未编排任务');
       return;
     }
+    lastStamp = stampOf(texts);
     install(texts, '已刷新 ' + (selectedPath || '任务目录'));
   }catch(e){ status('刷新失败：' + e.message + '，已保留上次任务', true); }
 });}
@@ -498,9 +537,5 @@ try{ document.documentElement.setAttribute('data-boot','ok'); }catch(e){}
 if(isLocalFile()){
   status(localFileHint(), !canPickDir());
 }else{
-  guarded(async()=>{
-    const texts = await fetchHarness();
-    if(!texts){ showEmpty('尚未编排任务'); return; }
-    install(texts, '已载入当前项目任务');
-  });
+  startPoll();
 }
