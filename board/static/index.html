@@ -477,6 +477,15 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
 .event .badge.ok{color:var(--st-passed);border-color:color-mix(in oklch,var(--st-passed) 45%,var(--line))}
 .event .badge.bad{color:var(--st-blocked);border-color:color-mix(in oklch,var(--st-blocked) 45%,var(--line))}
 .event .badge.miss{color:var(--faint)}
+
+.event-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.event-chips span{height:22px;padding:0 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);font-size:11.5px;color:var(--ink-2);display:inline-flex;align-items:center}
+.event-group{border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:4px}
+.event-group .event{border-bottom:0;padding-bottom:8px}
+.event-more{margin:0 0 10px;font-size:11.5px;color:var(--faint)}
+.event-raw{margin:6px 0 0}
+.event-raw summary{cursor:pointer;font-size:12px;color:var(--muted)}
+.event-raw pre{margin:8px 0 0;max-height:160px;overflow:auto;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);font:11.5px/1.45 var(--mono);color:var(--ink-2);white-space:pre-wrap;word-break:break-word}
 </style>
 </head>
 <body>

@@ -117,12 +117,13 @@ function run(extras){
     + '"reviews.jsonl":JSON.stringify({id:"rv-01",task:"t-01",ev:"ev-01",reviewer_context:"codex-independent-task",verdict:"pass",reason:"范围与验证通过",ts:"2026-09-11T12:05:00Z"})}, "证据")',
     http.scope
   );
+  assert.match(http.node('events').innerHTML, /验证通过/);
+  assert.match(http.node('events').innerHTML, /12 项通过/);
+  assert.match(http.node('events').innerHTML, /原始记录/);
   assert.match(http.node('events').innerHTML, /go test/);
-  assert.match(http.node('events').innerHTML, /12 passed/);
-  assert.match(http.node('events').innerHTML, /abc123/);
   assert.match(http.node('events').innerHTML, /验证通过/);
   assert.match(http.node('events').innerHTML, /范围与验证通过/);
-  assert.match(http.node('events').innerHTML, /独立 Codex 任务/);
+  assert.match(http.node('events').innerHTML, /独立评审/);
   assert.doesNotMatch(http.node('detail').innerHTML, /跑了 /);
 
   console.log('UI logic: assertions passed (mock DOM; not browser visual verification)');
