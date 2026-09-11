@@ -8,7 +8,7 @@
 |------|------|----------|------|
 | `main` | 无宿主 | 不安装到 IDE | 核心协议、评审方法论、共享模板与可选看板。阅读入口。 |
 | `claude` | Claude Code | `~/.claude/skills/task-harness`，若有 CC Switch 则同步主库；斜杠命令进 `~/.claude/commands/` | 原 `main` 的 Claude 发行版。可选 gstack 兜底。 |
-| `codex` | OpenAI Codex | `$CODEX_HOME/skills/task-harness`（默认 `~/.codex/skills/task-harness`） | 原 `codex`。PowerShell 优先，独立 Codex 评审上下文，本地看板。 |
+| `codex` | OpenAI Codex | `$CODEX_HOME/skills/task-harness`（默认 `~/.codex/skills/task-harness`） | 原 `codex-native-v3.1`。PowerShell 优先，独立 Codex 评审上下文，本地看板。 |
 | `traework` | TRAE / Trae Work | `~/.trae-cn/skills/task-harness`；命令进 `~/.trae-cn/commands/`；评审子智能体进 `~/.trae-cn/agents/` | TRAE 专用。默认不写 Claude。 |
 | `workbuddy` | WorkBuddy | `~/.workbuddy/skills/task-harness` | WorkBuddy 用户技能目录。独立会话评审。 |
 | `dsh` | DeepSeek Harness（DSH，口头常说 dhs） | `~/.dsh/skills/task-harness`；项目级也可放 `<repo>/.dsh/skills/task-harness` | DSH 文件系统 skill 提供方扫描这两个根。 |
@@ -19,7 +19,7 @@
 |--------|------|
 | `main`（整理前，Claude Code + 斜杠命令 + CC Switch） | 内容迁到 `claude` |
 | `feature/v3.1-inline-review` | 与旧 `main` 相同，已删除 |
-| `codex` | 重命名为 `codex` |
+| `codex-native-v3.1` | 重命名为 `codex` |
 | `traework` | 保留，去掉「顺手装 Claude」作为主路径 |
 
 ## 选择哪条分支
