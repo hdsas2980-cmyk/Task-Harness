@@ -17,7 +17,7 @@ const means = {
   regressed:'曾经通过，但因依赖/接口变更失效，需要重做'
 };
 const fillOf = {pending:8,active:42,evidence_ready:78,passed:100,blocked:28,regressed:55};
-let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'list';
+let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'list', eventFilter = 'all';
 let chain = Promise.resolve(), statusTimer = null;
 const timers = {
   set(fn, ms){ if(typeof setTimeout === 'function'){ timers.id = setTimeout(fn, ms); } },
@@ -278,18 +278,92 @@ function renderAll(){
     }
   }
 
-  const verdict = {pass:'通过',fail:'评审未通过'};
-  const events = [...model.evidence.map(x=>({...x,kind:'e'})), ...model.reviews.map(x=>({...x,kind:'r'}))]
-    .sort((a,b)=>String(b.ts || '').localeCompare(String(a.ts || ''))).slice(0,5);
-  const eventsEl = $('events');
-  if(eventsEl){
-    eventsEl.innerHTML = events.map(x=>'<div class="event"><b>' + (x.kind === 'e' ? '证据' : '评审')
-      + ' · <span class="id">' + esc(x.task || '—') + '</span></b><small>'
-      + (x.kind === 'e' ? '退出码 ' + esc(x.exit ?? '未知') : (verdict[x.verdict] || '未知') + ' · ' + esc(x.reviewer_context || '未记录上下文'))
-      + '</small><small class="ts">' + esc(x.ts || '未记录时间') + '</small></div>').join('')
-      || '<p class="empty-note">暂无证据或评审</p>';
-  }
+  renderEvents(rows[selected]);
   setText('progress', model.progress || '暂无进度日志');
+}
+function isMetaRow(x){ return !x || x._comment || x.comment; }
+function asText(value){
+  if(value == null || value === '') return '';
+  if(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try{ return JSON.stringify(value, null, 0); }catch(e){ return String(value); }
+}
+function kv(label, value){
+  const text = asText(value);
+  if(!text) return '';
+  return '<div class="kv"><span>' + esc(label) + '</span><code>' + esc(text) + '</code></div>';
+}
+function encodingOf(x){
+  const env = (x && typeof x.environment === 'object' && x.environment) ? x.environment : {};
+  return x.encoding || x.PYTHONIOENCODING || env.encoding || env.PYTHONIOENCODING || env.PYTHONUTF8 || env.locale || '';
+}
+function extrasOf(x, known){
+  if(!x || typeof x !== 'object') return '';
+  return Object.keys(x).filter(k => !known.has(k) && !String(k).startsWith('_') && x[k] != null && x[k] !== '')
+    .map(k => kv(k, x[k])).join('');
+}
+function renderEvidenceCard(x){
+  const ok = x.exit === 0 || x.exit === '0';
+  const cls = ok ? 'ok' : (x.exit == null || x.exit === '' ? 'miss' : 'bad');
+  const known = new Set(['id','task','cmd','exit','tests','summary','rev','ts','encoding','PYTHONIOENCODING','artifacts','environment','kind']);
+  return '<article class="event is-e">'
+    + '<header><b>证据</b><span class="id">' + esc(x.id || '—') + '</span><span class="id">' + esc(x.task || '—') + '</span>'
+    + '<span class="badge ' + cls + '">退出码 ' + esc(x.exit ?? '未知') + '</span></header>'
+    + kv('命令', x.cmd)
+    + kv('测试摘要', x.tests || x.summary)
+    + kv('revision', x.rev)
+    + kv('编码', encodingOf(x))
+    + kv('产物', x.artifacts)
+    + kv('环境', x.environment)
+    + kv('时间', x.ts)
+    + extrasOf(x, known)
+    + '</article>';
+}
+function renderReviewCard(x){
+  const cls = x.verdict === 'pass' ? 'ok' : (x.verdict === 'fail' ? 'bad' : 'miss');
+  const verdict = {pass:'通过', fail:'未通过'};
+  const known = new Set(['id','task','ev','reviewer_context','verdict','reason','note','ts','kind']);
+  return '<article class="event is-r">'
+    + '<header><b>评审</b><span class="id">' + esc(x.id || '—') + '</span><span class="id">' + esc(x.task || '—') + '</span>'
+    + '<span class="badge ' + cls + '">' + esc(verdict[x.verdict] || x.verdict || '未知') + '</span></header>'
+    + kv('理由', x.reason || x.note)
+    + kv('评审上下文', x.reviewer_context)
+    + kv('对应证据', x.ev)
+    + kv('时间', x.ts)
+    + extrasOf(x, known)
+    + '</article>';
+}
+function renderEvents(current){
+  const eventsEl = $('events');
+  if(!eventsEl) return;
+  const currentId = current && current.id;
+  const items = [
+    ...model.evidence.filter(x => !isMetaRow(x)).map(x => ({...x, kind:'e'})),
+    ...model.reviews.filter(x => !isMetaRow(x)).map(x => ({...x, kind:'r'}))
+  ].sort((a,b)=>String(b.ts || '').localeCompare(String(a.ts || '')));
+  const filtered = items.filter(x => {
+    if(eventFilter === 'e') return x.kind === 'e';
+    if(eventFilter === 'r') return x.kind === 'r';
+    if(eventFilter === 'current') return currentId && x.task === currentId;
+    return true;
+  });
+  const shown = filtered.slice(0, 80);
+  setText('events-count', (shown.length === filtered.length ? (filtered.length + ' 条') : (shown.length + '/' + filtered.length + ' 条'))
+    + (currentId ? ' · 当前 ' + currentId : ''));
+  const filterBtns = (document.querySelectorAll && document.querySelectorAll('#event-filters [data-evf]')) || [];
+  filterBtns.forEach(btn => {
+    const key = (btn.dataset && btn.dataset.evf) || (btn.getAttribute && btn.getAttribute('data-evf'));
+    if(btn.setAttribute) btn.setAttribute('aria-current', eventFilter === key ? 'true' : 'false');
+  });
+  eventsEl.innerHTML = shown.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
+    || '<p class="empty-note">暂无证据或评审</p>';
+  const detailEv = $('detail-events');
+  if(detailEv){
+    if(!currentId){ detailEv.innerHTML = ''; return; }
+    const mine = items.filter(x => x.task === currentId).slice(0, 4);
+    detailEv.innerHTML = mine.length
+      ? '<h3>证据 / 评审</h3>' + mine.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
+      : '<h3>证据 / 评审</h3><p class="muted">该任务还没有证据或评审</p>';
+  }
 }
 async function fetchOne(name){
   const errs = []; let notFound = false;

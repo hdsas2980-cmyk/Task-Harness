@@ -127,8 +127,8 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 建议将运行文件放在项目 `.harness/`；兼容项目根目录：
 
 - `tasks.json`：唯一任务真相源；状态为 `pending`、`active`、`evidence_ready`、`passed`、`blocked`、`regressed`。
-- `evidence.jsonl`：追加 `{id, task, cmd, exit, tests, rev, ts}`，可增加 `artifacts`、`environment`。
-- `reviews.jsonl`：追加 `{id, task, ev, reviewer_context, verdict, ts}`。
+- `evidence.jsonl`：追加 `{id, task, cmd, exit, tests, rev, ts}`，可增加 `encoding`、`artifacts`、`environment`。
+- `reviews.jsonl`：追加 `{id, task, ev, reviewer_context, verdict, reason, ts}`。
 - `progress.txt`：追加式叙事日志，只读取最后一段恢复背景。
 - `board/`：可视化看板是独立目录，不随技能安装；见上文「可视化看板」。
 

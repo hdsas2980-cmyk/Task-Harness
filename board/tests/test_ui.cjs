@@ -14,6 +14,8 @@ assert.match(html, /data-filter="all"[\s\S]*data-filter="blocked"/);
 assert.match(html, /id="tab-btn-list"[\s\S]*id="tab-btn-next"/);
 assert.match(code, /mainTab = 'list'/);
 assert.match(code, /data-status=/);
+assert.match(code, /renderEvidenceCard/);
+assert.match(html, /event-filters/);
 assert.match(html, /从 Codex 会话选择/);
 assert.match(code, /api\/sessions/);
 assert.match(code, /api\/source/);
@@ -109,6 +111,19 @@ function run(extras){
   assert.match(http.node('tasks').innerHTML,/picked-1/);
   assert.match(http.node('status').textContent,/已根据会话载入|已载入/);
   assert.match(http.node('project').textContent,/proj/);
+  vm.runInContext(
+    'install({"tasks.json":JSON.stringify({project:"demo",tasks:[{id:"t-01",status:"evidence_ready",priority:1,desc:"x"}]}),'
+    + '"evidence.jsonl":JSON.stringify({id:"ev-01",task:"t-01",cmd:"go test ./...",exit:0,tests:"12 passed",rev:"abc123",encoding:"utf-8",ts:"2026-09-11T12:00:00Z"}),'
+    + '"reviews.jsonl":JSON.stringify({id:"rv-01",task:"t-01",ev:"ev-01",reviewer_context:"codex-independent-task",verdict:"pass",reason:"范围与验证通过",ts:"2026-09-11T12:05:00Z"})}, "证据")',
+    http.scope
+  );
+  assert.match(http.node('events').innerHTML, /go test/);
+  assert.match(http.node('events').innerHTML, /12 passed/);
+  assert.match(http.node('events').innerHTML, /abc123/);
+  assert.match(http.node('events').innerHTML, /utf-8/);
+  assert.match(http.node('events').innerHTML, /范围与验证通过/);
+  assert.match(http.node('events').innerHTML, /codex-independent-task/);
+  assert.match(http.node('detail-events').innerHTML, /退出码/);
 
   console.log('UI logic: assertions passed (mock DOM; not browser visual verification)');
 })().catch(e=>{console.error(e);process.exitCode=1;});
