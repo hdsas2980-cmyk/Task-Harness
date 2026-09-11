@@ -1,6 +1,8 @@
 # Task Harness v3.1 — Codex Native
 
-这是 `hdsas2980-cmyk/Task-Harness` 的 Codex 专用适配分支：`codex-native-v3.1`。
+这是 OpenAI Codex 宿主分支（原 \codex\）。核心协议在 \main\。分支表见 [BRANCHES.md](BRANCHES.md)。
+
+这是 `hdsas2980-cmyk/Task-Harness` 的 Codex 专用适配分支：`codex`。
 
 ## 保留的核心能力
 
