@@ -1,4 +1,11 @@
-# Task Harness v3.1
+# Task Harness v3.1 — Claude Code
+
+这是 Claude Code 宿主分支。核心协议在 \main\；本分支只负责 \~/.claude\（及可选 CC Switch）安装、斜杠命令和 gstack 可选兜底。
+
+分支表见 [BRANCHES.md](BRANCHES.md)。
+
+---
+
 
 长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，
 主会话上下文不随任务数增长。适用于需跨多次会话增量推进的大型工程。
@@ -185,3 +192,7 @@ pending → active → evidence_ready → passed
 
 见 [LICENSE](LICENSE)。内联评审方法论改编自 gstack（MIT © 2026 Garry Tan），
 见 [references/review/NOTICE](references/review/NOTICE)。
+
+## 可选本地看板
+
+核心看板在 \main\ / \codex\ 维护。若要在 Claude 环境打开 W.0.0.1\ 看板，可另检出 \main\ 使用 eferences/templates/init.ps1\。本分支默认仍用 \init.sh\ 打印紧凑状态，避免破坏 SETUP.md 冒烟步骤。
