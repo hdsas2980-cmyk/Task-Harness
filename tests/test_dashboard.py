@@ -226,13 +226,9 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("isTauri", js)
         self.assertNotIn("__TAURI__", js)
         self.assertNotIn("probe_harness_dir", js)
-        self.assertTrue((ROOT / "dashboard/TaskHarness.sln").exists())
-        self.assertTrue((ROOT / "dashboard/TaskHarness/TaskHarness.csproj").exists())
-        self.assertTrue((ROOT / "dashboard/TaskHarness.Core/TaskHarness.Core.csproj").exists())
-        self.assertTrue((ROOT / "dashboard/Build.ps1").exists())
-        self.assertFalse((ROOT / "dashboard/ui").exists())
-        self.assertFalse((ROOT / "dashboard/src-tauri").exists())
-        self.assertFalse((ROOT / "dashboard/package.json").exists())
+        self.assertTrue((ROOT / "start-dashboard.ps1").exists())
+        self.assertTrue((ROOT / "start-dashboard.sh").exists())
+        self.assertFalse((ROOT / "dashboard").exists())
 
 
 if __name__ == "__main__":

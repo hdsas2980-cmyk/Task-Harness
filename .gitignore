@@ -5,8 +5,5 @@ _build/
 _gen_*.py
 _fix.py
 _wpf_*.py
-
-dashboard/**/bin/
-dashboard/**/obj/
-dashboard/dist/
-*.user
+_ui*.py
+_fix_web.py

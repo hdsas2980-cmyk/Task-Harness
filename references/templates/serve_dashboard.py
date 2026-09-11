@@ -51,12 +51,7 @@ def resolve_paths(project):
 
 
 def spa_source():
-    here = Path(__file__).resolve()
-    standalone = here.parents[2] / "dashboard" / "ui" / "index.html"
-    sibling = here.with_name("task-harness.html")
-    if standalone.is_file():
-        return standalone
-    return sibling
+    return Path(__file__).resolve().with_name("task-harness.html")
 
 
 def copy_spa(output):

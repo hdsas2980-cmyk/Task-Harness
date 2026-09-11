@@ -132,8 +132,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 - `progress.txt`：追加式叙事日志，只读取最后一段恢复背景。
 - `references/templates/init.ps1`：Windows/Codex 原生初始化脚本。
 - `references/templates/init.sh`：Git Bash/Linux/macOS 兼容初始化脚本。
-- `dashboard/`：WPF 桌面壳（.NET 8 自包含单文件）。启动探测当前目录；载入 = 系统文件夹框另选项目任务目录。
-- `references/templates/task-harness.html`：同一份 SPA 的技能副本。
+- `references/templates/task-harness.html` + `app.js`：技能携带的静态 Web 看板。
 - `references/templates/serve_dashboard.py`：可选地把 SPA 挂到 `127.0.0.1`，不改任务真相源。
 
 ## 项目看板
@@ -147,7 +146,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 - 端口独占本项目 source：候选端口若已被其他项目的看板占用则自动换端口，绝不复用他人地址；复用已有服务前也会校验该端口返回的 `tasks.json` 与本项目一致。
 - 编排完成首次自动用该 URL 打开；后续初始化复用已有端口。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`（仍启动/复用服务并打印 URL）。Codex 内用浏览器面板打开 `DASHBOARD` 的 http 地址，不要打开 `file://`。无界面环境只记录 URL。
 - 更新任务、证据、评审、日志后重新初始化或在页面点「刷新任务」。服务只暴露看板和 `tasks.json` / `evidence.jsonl` / `reviews.jsonl` / `progress.txt`，绝不写任务真相源。
-- 「载入任务」选择项目任务目录（`.harness` 或项目根）；「刷新任务」重读该目录。WPF 桌面壳 `TaskHarness.exe` 启动先探测当前工作目录 / exe 目录 / 上次目录，点「载入任务」才弹出系统文件夹框。技能 HTTP 看板初始化仍可先载入当前项目，随后也能用浏览器文件夹选择改选目录。
+- 「载入任务」在浏览器中选择项目任务目录（`.harness` 或项目根）；「刷新任务」重读该目录。脚本初始化会先载入当前 HTTP 项目。没有独立桌面壳。
 - 页面状态中文，JSON 枚举仍保持英文；已通过只表示任务声明，缺少关联证据及评审必须显示门禁缺口，不代替独立评审。
 
 ## 修改任务定义

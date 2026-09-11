@@ -28,7 +28,7 @@ const setText = (id,text) => { const el = $(id); if(el) el.textContent = text; }
 function status(text, error=false){ timers.clear(); setText('status',text); const el = $('status'); if(el && el.classList && el.classList.toggle) el.classList.toggle('err',error); }
 function flash(text){ const el = $('status'); const prev = el ? el.textContent : ''; status(text); timers.set(()=>status(prev), 1600); }
 function isLocalFile(){ return location.protocol === 'file:'; }
-function localFileHint(){ return '点「载入任务」选择项目任务目录（.harness 或项目根）。独立桌面壳 TaskHarness.exe 用系统文件夹框，不依赖浏览器。'; }
+function localFileHint(){ return '点「载入任务」选择项目任务目录（.harness 或项目根）。请用脚本启动 HTTP 看板，不要打开 file://。'; }
 function parse(texts){
   if(!Object.hasOwn(texts,'tasks.json')) throw Error('缺少任务文件；原任务保持不变');
   let tasks;
