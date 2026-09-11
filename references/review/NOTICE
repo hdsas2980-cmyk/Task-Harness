@@ -4,7 +4,7 @@ gstack — github.com/garrytan/gstack
 MIT License, Copyright (c) 2026 Garry Tan
 
 已剥离 gstack 运行时依赖（telemetry / gbrain / checkpoint / skill-routing 等），
-仅保留评审方法论内核，并改写为 task-harness 语境（tasks.json + evidence.jsonl，
+仅保留评审方法论内核，并改写为宿主无关的 task-harness 语境（tasks.json + evidence.jsonl，
 非 git 工作区 rev=N/A），产出统一的 HARNESS_REVIEW 契约行。
 
 MIT License 全文（保留版权与许可声明为其唯一义务）：
