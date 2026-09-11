@@ -64,7 +64,7 @@ bash scripts/install.sh
 - 技能只携带一份静态 SPA。初始化把它复制到项目 `.harness/task-harness.html`，然后仅绑定 `127.0.0.1` 提供 HTTP；输出 `DASHBOARD: http://127.0.0.1:<port>/task-harness.html`。
 - 编排完成首次自动打开该 URL；后续初始化复用已有端口。`-Open` / `--open` 重新打开；自动化测试用 `-NoOpen` / `--no-open`。Codex 内用浏览器面板打开 http 地址，不要打开 `file://`。
 - 更新任务、证据、评审、日志后重新初始化或在页面点「刷新任务」。服务只读，绝不写任务真相源。
-- 「载入任务」「刷新任务」只 fetch 当前项目 harness 文件，不打开资源管理器。`file://` 无法读取实时任务。
+- 「载入任务」选择项目任务目录；独立桌面壳在 `dashboard/`。技能初始化仍可先载入当前 HTTP 项目。
 - 页面状态中文，JSON 枚举仍保持英文；已通过只表示任务声明，缺少关联证据及评审必须显示门禁缺口，不代替独立评审。
 
 不要手工再开一套 `python -m http.server`；初始化脚本会复用 `.harness/.dashboard-server.json` 里的本机端口。`.harness/task-harness.html`、`.dashboard-opened` 与 `.dashboard-server.json` 为项目派生产物。初始化不创建任务定义。
