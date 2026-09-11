@@ -5,7 +5,7 @@ const labels = {pending:'待处理',active:'进行中',evidence_ready:'待独立
 const colors = {pending:'var(--st-pending)',active:'var(--st-active)',evidence_ready:'var(--st-ready)',passed:'var(--st-passed)',blocked:'var(--st-blocked)',regressed:'var(--st-regressed)'};
 const states = Object.keys(labels);
 const optional = ['evidence.jsonl','reviews.jsonl','progress.txt','board.json'];
-const views = [['blocked','已阻塞'],['evidence_ready','待评审'],['active','进行中'],['eligible','可推进'],['all','全部任务']];
+const views = [['all','全部任务'],['blocked','已阻塞'],['evidence_ready','待评审'],['active','进行中'],['eligible','可推进']];
 let model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:'',board:null};
 // 状态词典：每个词对"人"到底意味着什么 —— 尤其 evidence_ready 最容易误读。
 const means = {
@@ -17,7 +17,7 @@ const means = {
   regressed:'曾经通过，但因依赖/接口变更失效，需要重做'
 };
 const fillOf = {pending:8,active:42,evidence_ready:78,passed:100,blocked:28,regressed:55};
-let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'next';
+let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'list';
 let chain = Promise.resolve(), statusTimer = null;
 const timers = {
   set(fn, ms){ if(typeof setTimeout === 'function'){ timers.id = setTimeout(fn, ms); } },
@@ -101,7 +101,7 @@ function depMarkup(byId, deps){
 function waveOf(t){ return t.wave || ('阶段 ' + (t.phase ?? '未分组')); }
 function setTab(tab){
   const tabs = ['list','gantt','next','log'];
-  mainTab = tabs.indexOf(tab) >= 0 ? tab : 'next';
+  mainTab = tabs.indexOf(tab) >= 0 ? tab : 'list';
   for(const id of tabs){
     const panel = $('tab-' + id);
     if(panel) panel.hidden = mainTab !== id;
@@ -130,7 +130,7 @@ function renderCards(rows, byId){
           : '<span class="flag" title="' + esc(g) + '">已关联</span>')
       : '';
     const title = t.desc || t.description || '';
-    return '<article class="tcard" data-i="' + i + '" aria-selected="' + (i === selected) + '">'
+    return '<article class="tcard is-' + esc(t.status) + '" data-status="' + esc(t.status) + '" data-i="' + i + '" aria-selected="' + (i === selected) + '">'
       + '<div class="row"><span class="id">' + esc(t.id) + '</span><span class="pri">P' + esc(t.priority ?? '—') + '</span></div>'
       + '<div class="state"><i class="dot" style="background:' + colors[t.status] + '" aria-hidden="true"></i>' + labels[t.status] + '</div>'
       + '<p class="desc" title="' + esc(title) + '">' + esc(title || '未填写') + '</p>'
@@ -197,7 +197,10 @@ function renderAll(){
   setText('hero-desc', next ? (next.desc || next.description || '未填写描述')
     : (all.length ? '没有可推进任务：依赖未满足或已全部完成' : '尚未编排任务'));
   const hero = $('hero-card');
-  if(hero && hero.classList && hero.classList.toggle) hero.classList.toggle('is-empty', !next);
+  if(hero){
+    if(hero.classList && hero.classList.toggle) hero.classList.toggle('is-empty', !next);
+    if(hero.setAttribute) hero.setAttribute('data-status', next ? next.status : '');
+  }
   const dep = $('hero-dep');
   if(dep){
     if(!next) dep.innerHTML = '<span>—</span>';
@@ -233,6 +236,7 @@ function renderAll(){
       const found = views.find(v=>v[0] === filter);
       const name = (found ? found[1] : null) || labels[filter] || filter;
       chip.hidden = false;
+      const st = Object.hasOwn(labels, filter) ? filter : ''; if(chip.dataset) chip.dataset.status = st; else if(chip.setAttribute) chip.setAttribute('data-status', st);
       chip.innerHTML = '筛选：' + esc(name) + ' <button type="button" class="chip-x" data-filter="all" aria-label="清除筛选">×</button>';
     }
   }

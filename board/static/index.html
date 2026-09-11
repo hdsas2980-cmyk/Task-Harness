@@ -425,6 +425,42 @@ nav[aria-label="任务视图"] button .nav-txt em{font:400 11px/1.3 var(--sans);
 .badge.ok{border-color:color-mix(in oklch,var(--st-passed) 45%,var(--line));color:var(--st-passed)}
 .badge.miss{color:var(--faint)}
 .load-empty{padding:28px 14px;text-align:center;color:var(--faint);font-size:12.5px}
+
+.tcard{--st:var(--st-pending);border-color:color-mix(in oklch,var(--st) 38%,var(--line));background:color-mix(in oklch,var(--st) 11%,var(--surface-2));box-shadow:inset 3px 0 0 var(--st)}
+.tcard:hover{border-color:color-mix(in oklch,var(--st) 55%,var(--line-2));background:color-mix(in oklch,var(--st) 16%,var(--hover))}
+.tcard[aria-selected="true"]{border-color:color-mix(in oklch,var(--st) 70%,var(--accent-edge));background:color-mix(in oklch,var(--st) 18%,var(--pick));box-shadow:inset 3px 0 0 var(--st)}
+.tcard .state{color:var(--st);font-weight:500}
+.tcard.is-pending,.tcard[data-status="pending"]{--st:var(--st-pending)}
+.tcard.is-active,.tcard[data-status="active"]{--st:var(--st-active)}
+.tcard.is-evidence_ready,.tcard[data-status="evidence_ready"]{--st:var(--st-ready)}
+.tcard.is-passed,.tcard[data-status="passed"]{--st:var(--st-passed)}
+.tcard.is-blocked,.tcard[data-status="blocked"]{--st:var(--st-blocked)}
+.tcard.is-regressed,.tcard[data-status="regressed"]{--st:var(--st-regressed)}
+nav button[data-filter="blocked"]{--st:var(--st-blocked)}
+nav button[data-filter="evidence_ready"]{--st:var(--st-ready)}
+nav button[data-filter="active"]{--st:var(--st-active)}
+nav button[data-filter="eligible"]{--st:var(--st-passed)}
+nav button[data-filter="all"]{--st:var(--ink)}
+nav button[data-filter] svg{color:var(--st)}
+nav button[aria-current=page]::before{background:var(--st, var(--ink))}
+.hero{--st:var(--accent)}
+.hero[data-status="pending"]{--st:var(--st-pending)}
+.hero[data-status="active"]{--st:var(--st-active)}
+.hero[data-status="evidence_ready"]{--st:var(--st-ready)}
+.hero[data-status="passed"]{--st:var(--st-passed)}
+.hero[data-status="blocked"]{--st:var(--st-blocked)}
+.hero[data-status="regressed"]{--st:var(--st-regressed)}
+.hero::before{background:var(--st)}
+.hero-id{color:var(--st)}
+.filter-chip{--st:var(--accent)}
+.filter-chip[data-status="pending"]{--st:var(--st-pending)}
+.filter-chip[data-status="active"]{--st:var(--st-active)}
+.filter-chip[data-status="evidence_ready"]{--st:var(--st-ready)}
+.filter-chip[data-status="passed"]{--st:var(--st-passed)}
+.filter-chip[data-status="blocked"]{--st:var(--st-blocked)}
+.filter-chip[data-status="regressed"]{--st:var(--st-regressed)}
+.filter-chip{border-color:color-mix(in oklch,var(--st) 45%,var(--line));color:var(--st);background:color-mix(in oklch,var(--st) 12%,var(--surface))}
+nav button[aria-current=page] svg{color:var(--st, var(--ink))}
 </style>
 </head>
 <body>
@@ -435,11 +471,11 @@ nav[aria-label="任务视图"] button .nav-txt em{font:400 11px/1.3 var(--sans);
       <span class="txt"><b>长任务看板</b><span id="project">未选择目录</span></span>
     </div>
     <nav aria-label="任务视图" id="rail-nav">
+      <button type="button" data-filter="all"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h.01M3 12h.01M3 18h.01M8.5 6H21M8.5 12H21M8.5 18H21"/></svg><span class="nav-txt">全部任务<em>不筛选，看全集</em></span><b id="c-all">0</b></button>
       <button type="button" data-filter="blocked"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5M12 16h.01"/></svg><span class="nav-txt">已阻塞<em>卡住了，先解开</em></span><b id="c-blocked">0</b></button>
       <button type="button" data-filter="evidence_ready"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg><span class="nav-txt">待评审<em>验过才算完成</em></span><b id="c-evidence_ready">0</b></button>
       <button type="button" data-filter="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3.5l2.5-6 3.5 12 2.5-6h6"/></svg><span class="nav-txt">进行中<em>正在做，还没交</em></span><b id="c-active">0</b></button>
       <button type="button" data-filter="eligible"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg><span class="nav-txt">可推进<em>现在就能开工</em></span><b id="c-eligible">0</b></button>
-      <button type="button" data-filter="all"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h.01M3 12h.01M3 18h.01M8.5 6H21M8.5 12H21M8.5 18H21"/></svg><span class="nav-txt">全部任务<em>不筛选，看全集</em></span><b id="c-all">0</b></button>
     </nav>
     <section class="rail-detail" aria-label="当前行">
       <h2>当前行</h2>
@@ -467,13 +503,13 @@ nav[aria-label="任务视图"] button .nav-txt em{font:400 11px/1.3 var(--sans);
 
   <main class="main">
     <div class="tabs" id="view-tabs" role="tablist" aria-label="任务视图切换">
-      <button type="button" role="tab" id="tab-btn-next" data-tab="next" aria-controls="tab-next" aria-selected="true">下一步看板</button>
-      <button type="button" role="tab" id="tab-btn-list" data-tab="list" aria-controls="tab-list" aria-selected="false">任务列表</button>
+      <button type="button" role="tab" id="tab-btn-list" data-tab="list" aria-controls="tab-list" aria-selected="true">任务列表</button>
+      <button type="button" role="tab" id="tab-btn-next" data-tab="next" aria-controls="tab-next" aria-selected="false">下一步看板</button>
       <button type="button" role="tab" id="tab-btn-gantt" data-tab="gantt" aria-controls="tab-gantt" aria-selected="false">进度时间线</button>
       <button type="button" role="tab" id="tab-btn-log" data-tab="log" aria-controls="tab-log" aria-selected="false">进度日志</button>
     </div>
 
-    <section class="panel" id="tab-list" role="tabpanel" aria-labelledby="tab-btn-list" hidden>
+    <section class="panel" id="tab-list" role="tabpanel" aria-labelledby="tab-btn-list">
       <div class="tools">
         <span class="filter-chip" id="filter-chip" hidden></span>
         <div class="grow"></div>
@@ -498,7 +534,7 @@ nav[aria-label="任务视图"] button .nav-txt em{font:400 11px/1.3 var(--sans);
       <div class="gantt" id="gantt"></div>
     </section>
 
-    <section class="panel next-panel" id="tab-next" role="tabpanel" aria-labelledby="tab-btn-next">
+    <section class="panel next-panel" id="tab-next" role="tabpanel" aria-labelledby="tab-btn-next" hidden>
       <section class="hero is-empty" id="hero-card" aria-label="下一步看板">
         <p class="hero-label">下一步看板</p>
         <div class="hero-line">
