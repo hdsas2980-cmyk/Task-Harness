@@ -8,15 +8,24 @@ import json
 import os
 import posixpath
 import sys
+import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+from pick_dir import pick_directory_subprocess  # noqa: E402
+from sessions import list_session_catalog, resolve_source  # noqa: E402
+
 STATIC = HERE / "static"
 OPTIONAL = ("evidence.jsonl", "reviews.jsonl", "progress.txt", "board.json")
 PORT_MIN, PORT_MAX = 8765, 8799
+SOURCE_LOCK = threading.Lock()
+PICK_LOCK = threading.Lock()
 
 
 def configure_stdio() -> None:
@@ -37,19 +46,9 @@ def emit(msg: str) -> None:
     print(msg)
 
 
-def resolve_source(project: Path) -> Path:
-    target = project.expanduser().resolve()
-    if not target.exists():
-        raise ValueError("项目目录不存在: " + str(target))
-    if target.name == ".harness":
-        return target
-    nested = target / ".harness"
-    if (nested / "tasks.json").is_file() or not (target / "tasks.json").is_file():
-        return nested
-    return target
-
-
-def snapshot(source: Path) -> dict:
+def snapshot(source: Path | None) -> dict:
+    if source is None:
+        return {"source": None, "files": {}}
     files = {}
     tasks = source / "tasks.json"
     if tasks.is_file():
@@ -61,8 +60,18 @@ def snapshot(source: Path) -> dict:
     return {"source": str(source), "files": files}
 
 
+def bind_source(path_str: str) -> Path:
+    raw = str(path_str or "").strip()
+    if not raw:
+        raise ValueError("请提供项目根或 .harness 目录")
+    source = resolve_source(Path(raw), must_exist=True)
+    with SOURCE_LOCK:
+        Handler.source = source
+    return source
+
+
 class Handler(BaseHTTPRequestHandler):
-    source = Path(".")
+    source: Path | None = None
     static = STATIC
 
     def log_message(self, format, *args):
@@ -77,12 +86,24 @@ class Handler(BaseHTTPRequestHandler):
             self._send_file(self.static / "app.js", "text/javascript; charset=utf-8")
             return
         if path == "/api/snapshot":
-            self._send_json(snapshot(self.source))
+            with SOURCE_LOCK:
+                source = self.source
+            self._send_json(snapshot(source))
+            return
+        if path == "/api/sessions":
+            with SOURCE_LOCK:
+                source = self.source
+            self._send_json(list_session_catalog(current_source=source))
             return
         name = path.lstrip("/")
         allowed = ("tasks.json",) + OPTIONAL
         if name in allowed:
-            fp = self.source / name
+            with SOURCE_LOCK:
+                source = self.source
+            if source is None:
+                self.send_error(404, "Not found")
+                return
+            fp = source / name
             if not fp.is_file():
                 self.send_error(404, "Not found")
                 return
@@ -97,10 +118,55 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404, "Not found")
 
     def do_POST(self):
+        path = posixpath.normpath(unquote(urlparse(self.path).path))
+        if path == "/api/source":
+            self._post_source()
+            return
+        if path == "/api/pick-dir":
+            self._post_pick_dir()
+            return
         self.send_error(405, "read-only")
 
     def do_PUT(self):
         self.send_error(405, "read-only")
+
+    def _post_source(self):
+        try:
+            body = self._read_json()
+            path = body.get("path") or body.get("cwd") or body.get("source") or ""
+            source = bind_source(str(path))
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400)
+            return
+        except json.JSONDecodeError:
+            self._send_json({"error": "JSON 无效"}, 400)
+            return
+        data = snapshot(source)
+        emit("轮询 " + str(source))
+        self._send_json(data)
+
+    def _post_pick_dir(self):
+        if not PICK_LOCK.acquire(blocking=False):
+            self._send_json({"error": "已有目录对话框打开", "cancelled": True}, 409)
+            return
+        try:
+            path = pick_directory_subprocess("选择 harness / 项目目录")
+        finally:
+            PICK_LOCK.release()
+        if not path:
+            self._send_json({"cancelled": True})
+            return
+        self._send_json({"path": path, "cancelled": False})
+
+    def _read_json(self) -> dict:
+        raw_len = int(self.headers.get("Content-Length") or 0)
+        if raw_len > 1_000_000:
+            raise ValueError("请求过大")
+        raw = self.rfile.read(raw_len) if raw_len else b"{}"
+        data = json.loads(raw.decode("utf-8-sig") or "{}")
+        if not isinstance(data, dict):
+            raise ValueError("JSON 必须是对象")
+        return data
 
     def _send_file(self, fp: Path, ctype: str) -> None:
         if not fp.is_file():
@@ -114,9 +180,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _send_json(self, obj) -> None:
+    def _send_json(self, obj, code: int = 200) -> None:
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
-        self.send_response(200)
+        self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(data)))
@@ -124,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def make_server(source: Path, port: int) -> ThreadingHTTPServer:
+def make_server(source: Path | None, port: int) -> ThreadingHTTPServer:
     Handler.source = source
     Handler.static = STATIC
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
@@ -145,13 +211,16 @@ def pick_port(preferred: int) -> int:
     raise ValueError("无法在 127.0.0.1:8765-8799 找到空闲端口")
 
 
-def serve(project: Path, port: int = 0, open_browser: bool = True) -> ThreadingHTTPServer:
-    source = resolve_source(project)
+def serve(project: Path | None, port: int = 0, open_browser: bool = True) -> ThreadingHTTPServer:
+    source = resolve_source(project, must_exist=True) if project is not None else None
     chosen = pick_port(port)
     httpd = make_server(source, chosen)
     url = "http://127.0.0.1:%s/" % chosen
     emit("看板 " + url)
-    emit("轮询 " + str(source))
+    if source is None:
+        emit("未绑定任务目录，请在页面指定 harness 或选择 Codex 会话。")
+    else:
+        emit("轮询 " + str(source))
     emit("只读，不写 tasks.json。Ctrl+C 停止。")
     if open_browser:
         try:
@@ -164,12 +233,13 @@ def serve(project: Path, port: int = 0, open_browser: bool = True) -> ThreadingH
 def main() -> None:
     configure_stdio()
     parser = argparse.ArgumentParser(description="只读轮询任务看板")
-    parser.add_argument("project", nargs="?", default=".", help="项目根或 .harness 目录")
+    parser.add_argument("project", nargs="?", default=None, help="项目根或 .harness 目录；省略则在页面选择")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--no-open", action="store_true")
     args = parser.parse_args()
+    project = Path(args.project) if args.project else None
     try:
-        httpd = serve(Path(args.project), args.port, not args.no_open)
+        httpd = serve(project, args.port, not args.no_open)
     except (OSError, ValueError) as exc:
         emit("看板启动失败: " + str(exc))
         sys.exit(1)

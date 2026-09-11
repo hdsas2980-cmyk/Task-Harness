@@ -137,8 +137,11 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 看板不在本技能包内，安装脚本也不会拷贝它。仓库独立目录 `board/` 提供只读 HTTP 页，轮询项目任务目录并自动刷新。
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File .\board\start.ps1
 powershell -ExecutionPolicy Bypass -File .\board\start.ps1 -ProjectDir "<项目绝对路径>"
 ```
+
+不传 `-ProjectDir` 时，页面「载入任务」可指定 harness 目录，或从本机 Codex 会话（`~/.codex/sessions` 的 `cwd`）选择工作目录。
 
 Windows 乱码：用 `board\start.ps1` / `board\start.bat`（已设 UTF-8 / `chcp 65001` / `python -X utf8`），不要自己再开一套 `python -m http.server`。
 

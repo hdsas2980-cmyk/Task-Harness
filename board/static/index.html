@@ -396,6 +396,35 @@ details.log pre{margin:0;padding:0 16px 14px;white-space:pre-wrap;word-break:bre
 nav[aria-label="任务视图"] button{height:auto;min-height:44px;padding:7px 9px;align-items:center}
 nav[aria-label="任务视图"] button .nav-txt{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13px;font-weight:500;color:inherit}
 nav[aria-label="任务视图"] button .nav-txt em{font:400 11px/1.3 var(--sans);color:var(--faint);font-style:normal}
+
+.load-drawer[hidden]{display:none}
+.load-drawer{position:fixed;inset:0;z-index:50}
+.load-drawer .drawer-mask{position:absolute;inset:0;background:oklch(20% 0.01 80 / .42)}
+.load-panel{position:absolute;top:0;right:0;bottom:0;width:min(680px,96vw);background:var(--surface);
+  border-left:1px solid var(--line);box-shadow:-16px 0 40px oklch(20% 0.01 80 / .14);display:flex;flex-direction:column}
+.load-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
+.load-head h2{margin:0;font:500 14px/1.2 var(--sans);letter-spacing:-0.01em;color:var(--ink)}
+.load-head p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.load-body{flex:1;min-height:0;overflow:auto;padding:14px 16px 20px;display:flex;flex-direction:column;gap:16px}
+.load-sec h3{margin:0 0 8px;font:500 11px/1 var(--sans);letter-spacing:.07em;color:var(--faint)}
+.path-row{display:flex;gap:8px;align-items:center}
+.path-row input,.load-tools input[type=search]{flex:1;min-width:0;height:32px;padding:0 10px;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--surface-2);font:12.5px/1.3 var(--mono)}
+.load-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.load-tools label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.load-list{border:1px solid var(--line);border-radius:var(--r-lg);overflow:auto;min-height:180px;max-height:calc(100vh - 280px);background:var(--surface-2)}
+.load-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;width:100%;padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);border-radius:0}
+.load-row:last-child{border-bottom:0}
+.load-row:hover{background:var(--hover)}
+.load-row.is-suggested{background:var(--accent-wash);box-shadow:inset 3px 0 0 var(--accent)}
+.load-row .title{font:500 13px/1.3 var(--sans);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.load-row .cwd{font:400 11.5px/1.3 var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.load-row .meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.load-row .when{font:400 11px/1 var(--mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.badge{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:999px;font:500 11px/1 var(--sans);border:1px solid var(--line-2);color:var(--muted)}
+.badge.ok{border-color:color-mix(in oklch,var(--st-passed) 45%,var(--line));color:var(--st-passed)}
+.badge.miss{color:var(--faint)}
+.load-empty{padding:28px 14px;text-align:center;color:var(--faint);font-size:12.5px}
 </style>
 </head>
 <body>
@@ -511,6 +540,38 @@ nav[aria-label="任务视图"] button .nav-txt em{font:400 11px/1.3 var(--sans);
       <button class="btn-icon" id="events-close" type="button" aria-label="关闭">×</button>
     </div>
     <div class="drawer-body" id="events"></div>
+  </aside>
+</div>
+
+<div class="load-drawer" id="load-drawer" hidden>
+  <div class="drawer-mask" data-close-load="1"></div>
+  <aside class="load-panel" role="dialog" aria-modal="true" aria-labelledby="load-title">
+    <div class="load-head">
+      <div>
+        <h2 id="load-title">载入任务</h2>
+        <p>指定 harness 目录，或从本机 Codex 会话选择工作目录。</p>
+      </div>
+      <button class="btn-icon" id="load-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="load-body">
+      <section class="load-sec">
+        <h3>1 指定 harness 目录</h3>
+        <div class="path-row">
+          <input id="load-path" type="text" spellcheck="false" placeholder="项目根或 .harness 的绝对路径">
+          <button class="btn" id="load-browse" type="button">浏览</button>
+          <button class="btn btn-solid" id="load-path-go" type="button">载入</button>
+        </div>
+      </section>
+      <section class="load-sec">
+        <h3>2 从 Codex 会话选择</h3>
+        <div class="load-tools">
+          <input id="load-q" type="search" placeholder="搜索标题、路径、会话编号">
+          <label><input id="load-harness-only" type="checkbox"> 仅已有看板</label>
+          <button class="btn" id="load-refresh-sess" type="button">刷新会话</button>
+        </div>
+        <div class="load-list" id="load-list"></div>
+      </section>
+    </div>
   </aside>
 </div>
 <script>

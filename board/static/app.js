@@ -28,7 +28,7 @@ const setText = (id,text) => { const el = $(id); if(el) el.textContent = text; }
 function status(text, error=false){ timers.clear(); setText('status',text); const el = $('status'); if(el && el.classList && el.classList.toggle) el.classList.toggle('err',error); }
 function flash(text){ const el = $('status'); const prev = el ? el.textContent : ''; status(text); timers.set(()=>status(prev), 1600); }
 function isLocalFile(){ return location.protocol === 'file:'; }
-function localFileHint(){ return '请用 board/start.ps1 启动 HTTP 看板，不要打开 file://。点「载入任务」也可选择项目任务目录。'; }
+function localFileHint(){ return '请用 board/start.ps1 启动 HTTP 看板，不要打开 file://。'; }
 function parse(texts){
   if(!Object.hasOwn(texts,'tasks.json')) throw Error('缺少任务文件；原任务保持不变');
   let tasks;
@@ -335,9 +335,9 @@ function guarded(fn){
   chain = run.catch(()=>{});
   return run;
 }
-function canPickDir(){ return typeof window.showDirectoryPicker === 'function'; }
 let selectedPath = '';
-let dirHandle = null;
+let sessionCatalog = {projects:[], suggested:null, sessions_dir:''};
+let bootTried = false;
 function setDirLabel(path){
   const el = $('project');
   if(el) el.textContent = path || '未选择目录';
@@ -348,83 +348,137 @@ function rememberPath(path){
   selectedPath = path || '';
   setDirLabel(selectedPath);
 }
-async function fileFromHandle(dir, name){
-  try{
-    const fh = await dir.getFileHandle(name);
-    return await (await fh.getFile()).text();
-  }catch(e){ return null; }
+function loadDrawer(){ return $('load-drawer'); }
+function openLoad(){
+  const el = loadDrawer();
+  if(!el) return;
+  el.hidden = false;
+  const input = $('load-path');
+  if(input && selectedPath && !input.value) input.value = selectedPath;
+  const q = $('load-q');
+  if(q) setTimeout(()=>q.focus(), 0);
 }
-async function readFromHandle(root){
-  const direct = await fileFromHandle(root, 'tasks.json');
-  let nested = null, sub = null;
-  try{
-    sub = await root.getDirectoryHandle('.harness');
-    nested = await fileFromHandle(sub, 'tasks.json');
-  }catch(e){}
-  let dir = null, tasks = null;
-  if(root.name === '.harness' && direct){ dir = root; tasks = direct; }
-  else if(nested){ dir = sub; tasks = nested; }
-  else if(direct){ dir = root; tasks = direct; }
-  if(!dir || tasks == null) return null;
-  dirHandle = dir;
-  const texts = {'tasks.json': tasks};
-  for(const n of optional){
-    const text = await fileFromHandle(dir, n);
-    if(text !== null) texts[n] = text;
-  }
-  return texts;
+function closeLoad(){
+  const el = loadDrawer();
+  if(el) el.hidden = true;
 }
-async function pickAndRead(){
-  if(typeof window.showDirectoryPicker === 'function'){
-    status('正在选择项目任务目录…');
-    const handle = await window.showDirectoryPicker({mode:'read'});
-    const texts = await readFromHandle(handle);
-    if(!texts) throw Error('该目录没有 tasks.json（可选 .harness 或项目根）');
-    rememberPath(handle.name);
-    return {texts};
-  }
-  if(isLocalFile()) throw Error(localFileHint());
-  const texts = await fetchHarness();
-  rememberPath('');
-  return {texts: texts, via:'http'};
+function api(url, opts){
+  return fetch(url, Object.assign({cache:'no-store'}, opts || {})).then(async r=>{
+    const text = await r.text();
+    let data = null;
+    try{ data = text ? JSON.parse(text) : {}; }catch(e){ data = {raw:text}; }
+    if(!r.ok){
+      throw Error((data && data.error) || ('HTTP ' + r.status));
+    }
+    return data;
+  });
 }
-async function rereadSelected(){
-  if(dirHandle){
-    const texts = await readFromHandle(dirHandle);
-    if(!texts) throw Error('已选目录里找不到 tasks.json');
-    return texts;
+function fmtWhen(value){
+  if(!value) return '';
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return String(value).replace('T',' ').slice(0,16);
+  return d.toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+function renderLoadList(){
+  const box = $('load-list');
+  if(!box) return;
+  const q = (($('load-q') && $('load-q').value) || '').trim().toLowerCase();
+  const only = $('load-harness-only') ? $('load-harness-only').checked : false;
+  const suggested = sessionCatalog.suggested || {};
+  const rows = (sessionCatalog.projects || []).filter(row=>{
+    if(only && !row.has_harness) return false;
+    if(!q) return true;
+    const blob = [row.cwd, row.latest_title, row.project_name, row.source]
+      .concat((row.sessions || []).map(s => [s.id, s.title, s.file].join(' ')))
+      .join(' ').toLowerCase();
+    return blob.includes(q);
+  });
+  if(!rows.length){
+    const hint = sessionCatalog.sessions_dir
+      ? ('没有匹配的会话。会话根 ' + sessionCatalog.sessions_dir)
+      : '没有读到 Codex 会话';
+    box.innerHTML = '<p class="load-empty">' + esc(hint) + '</p>';
+    return;
   }
-  if(!isLocalFile()) return await fetchHarness();
-  throw Error('尚未选择项目任务目录');
+  box.innerHTML = rows.map((row,i)=>{
+    const title = row.latest_title || row.project_name || row.cwd || '未命名会话';
+    const badge = row.has_harness
+      ? '<span class="badge ok">看板 ' + esc(row.task_count == null ? '' : (row.task_count + ' 项')) + '</span>'
+      : '<span class="badge miss">无 tasks.json</span>';
+    const isSug = suggested.source && row.source && suggested.source === row.source;
+    return '<button type="button" class="load-row' + (isSug ? ' is-suggested' : '') + '" data-i="' + i + '">'
+      + '<span><span class="title">' + esc(title) + '</span>'
+      + '<span class="cwd">' + esc(row.cwd || '无工作目录') + '</span></span>'
+      + '<span class="meta">' + badge
+      + '<span class="when">' + esc(fmtWhen(row.latest)) + ' · ' + esc(row.session_count || 0) + ' 会话</span></span>'
+      + '</button>';
+  }).join('');
+  box.querySelectorAll('.load-row').forEach((btn,i)=>{
+    btn.addEventListener('click', ()=>{
+      const row = rows[i];
+      guarded(()=>applySource(row.source || row.cwd, row.has_harness ? '已根据会话载入' : '已绑定目录（尚未编排任务）'));
+    });
+  });
+}
+async function refreshSessions(){
+  if(isLocalFile()){
+    sessionCatalog = {projects:[], suggested:null, sessions_dir:''};
+    renderLoadList();
+    return null;
+  }
+  const data = await api('/api/sessions');
+  sessionCatalog = data || {projects:[], suggested:null};
+  renderLoadList();
+  return sessionCatalog;
+}
+async function applySource(path, label){
+  const target = String(path || '').trim();
+  if(!target) throw Error('请指定项目根或 .harness 目录');
+  const data = await api('/api/source', {
+    method:'POST',
+    headers:{'Content-Type':'application/json; charset=utf-8'},
+    body: JSON.stringify({path: target})
+  });
+  rememberPath(data.source || target);
+  if(data.files && data.files['tasks.json']){
+    lastStamp = stampOf(data.files);
+    install(data.files, (label || '已载入') + ' ' + (data.source || target));
+    closeLoad();
+    return true;
+  }
+  showEmpty('该目录尚未编排任务');
+  closeLoad();
+  return false;
+}
+async function browseDir(){
+  status('正在打开目录对话框…');
+  const data = await api('/api/pick-dir', {method:'POST', headers:{'Content-Type':'application/json; charset=utf-8'}, body:'{}'});
+  if(!data || data.cancelled){ status('已取消选择目录'); return; }
+  const input = $('load-path');
+  if(input) input.value = data.path || '';
+  await applySource(data.path, '已载入所选目录');
+}
+async function loadFromPath(){
+  const input = $('load-path');
+  await applySource(input ? input.value : '', '已载入所选目录');
 }
 async function loadProject(){ await guarded(async()=>{
-  try{
-    const result = await pickAndRead();
-    if(result.cancelled){ status('已取消选择目录'); return; }
-    if(!result.texts){ showEmpty('该目录尚未编排任务'); return; }
-    const label = result.via === 'http' ? '已载入当前项目任务' : ('已载入 ' + (selectedPath || '任务目录'));
-    install(result.texts, label);
-  }catch(e){
-    if(e && e.name === 'AbortError'){ status('已取消选择目录'); return; }
-    throw e;
-  }
+  if(isLocalFile()) throw Error(localFileHint());
+  openLoad();
+  status('正在读取 Codex 会话…');
+  await refreshSessions();
+  status('选择 harness 目录或一条 Codex 会话');
 });}
 async function pullLive(){
-  if(dirHandle){
-    const texts = await readFromHandle(dirHandle);
-    if(!texts) throw Error('已选目录里找不到 tasks.json');
-    return texts;
-  }
   if(isLocalFile()) throw Error(localFileHint());
   try{
-    const r = await fetch('/api/snapshot', {cache:'no-store'});
-    if(r.ok){
-      const data = await r.json();
-      if(data && data.source) rememberPath(data.source);
-      if(data && data.files && data.files['tasks.json']) return data.files;
-    }
-  }catch(e){}
-  return await fetchHarness();
+    const data = await api('/api/snapshot');
+    if(data && data.source) rememberPath(data.source);
+    if(data && data.files && data.files['tasks.json']) return data.files;
+    return null;
+  }catch(e){
+    return await fetchHarness();
+  }
 }
 function stampOf(texts){
   return ['tasks.json','evidence.jsonl','reviews.jsonl','progress.txt','board.json']
@@ -447,12 +501,38 @@ function startPoll(){
   if(pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(tick, POLL_MS);
 }
+async function bootstrapSource(){
+  if(bootTried || isLocalFile()) return;
+  bootTried = true;
+  try{
+    const snap = await api('/api/snapshot');
+    if(snap && snap.source) rememberPath(snap.source);
+    if(snap && snap.files && snap.files['tasks.json']){
+      lastStamp = stampOf(snap.files);
+      install(snap.files, '已载入 ' + (snap.source || '任务目录'));
+      return;
+    }
+    openLoad();
+    const catalog = await refreshSessions();
+    const sug = catalog && catalog.suggested;
+    if(sug && (sug.source || sug.cwd)){
+      const ok = await applySource(sug.source || sug.cwd, sug.reason === 'latest_session' ? '已按最近会话载入' : '已自动载入');
+      if(ok) status('已自动载入 ' + (sug.title || sug.cwd || ''));
+      return;
+    }
+    status('选择 harness 目录或一条 Codex 会话');
+  }catch(e){
+    openLoad();
+    status('读取会话失败：' + ((e && e.message) || e), true);
+  }
+}
 async function refreshProject(){ await guarded(async()=>{
   try{
     const texts = await pullLive();
     if(!texts){
       if(model.tasks.tasks.length){ status('刷新失败：未找到 tasks.json，已保留上次任务', true); return; }
       showEmpty('尚未编排任务');
+      openLoad();
       return;
     }
     lastStamp = stampOf(texts);
@@ -487,6 +567,20 @@ async function copyCmd(){
 $('load').onclick = loadProject;
 $('refresh').onclick = refreshProject;
 $('copy').onclick = copyCmd;
+if($('load-close')) $('load-close').onclick = closeLoad;
+if($('load-browse')) $('load-browse').onclick = () => guarded(browseDir);
+if($('load-path-go')) $('load-path-go').onclick = () => guarded(loadFromPath);
+if($('load-refresh-sess')) $('load-refresh-sess').onclick = () => guarded(refreshSessions);
+if($('load-q')) $('load-q').addEventListener('input', renderLoadList);
+if($('load-harness-only')) $('load-harness-only').addEventListener('change', renderLoadList);
+if($('load-path')) $('load-path').addEventListener('keydown', e=>{
+  if(e.key === 'Enter'){ e.preventDefault(); guarded(loadFromPath); }
+});
+const loadEl = loadDrawer();
+if(loadEl) loadEl.addEventListener('click', e=>{
+  const t = e.target;
+  if(t && t.getAttribute && t.getAttribute('data-close-load')) closeLoad();
+});
 $('search').addEventListener('input', render);
 $('sort').addEventListener('change', e=>{ sortBy = e.target.value; render(); });
 $('rail-nav').addEventListener('click', e=>{
@@ -522,7 +616,7 @@ if(evDrawer) evDrawer.addEventListener('click', e=>{
   if(t && t.getAttribute && t.getAttribute('data-close-drawer')) closeEvents();
 });
 document.addEventListener('keydown', e=>{
-  if(e.key === 'Escape'){ closeEvents(); }
+  if(e.key === 'Escape'){ closeEvents(); closeLoad(); }
   if(e.target && e.target.matches && e.target.matches('input,select,textarea')) return;
   if(e.ctrlKey || e.metaKey || e.altKey) return;
   if(e.key === 'l' || e.key === 'L'){ e.preventDefault(); loadProject(); }
@@ -535,7 +629,8 @@ render();
 setDirLabel('');
 try{ document.documentElement.setAttribute('data-boot','ok'); }catch(e){}
 if(isLocalFile()){
-  status(localFileHint(), !canPickDir());
+  status(localFileHint(), true);
 }else{
   startPoll();
+  bootstrapSource();
 }

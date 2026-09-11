@@ -1,8 +1,8 @@
-﻿# 长任务看板（独立项目，不随 skill 安装）
+# 长任务看板（独立项目，不随 skill 安装）
 # UTF-8。Windows 控制台先切 65001，再交给 python -X utf8。
 [CmdletBinding()]
 param(
-  [Alias('HarnessDir')][string]$ProjectDir = (Get-Location).Path,
+  [Alias('HarnessDir')][string]$ProjectDir = '',
   [int]$Port = 0,
   [switch]$NoOpen
 )
@@ -26,7 +26,8 @@ if (-not $Python) { throw '需要 Python 3（标准库即可）来启动看板�
 $Serve = Join-Path $PSScriptRoot 'serve.py'
 if (-not (Test-Path -LiteralPath $Serve)) { throw "缺少 $Serve" }
 
-$Arguments = @('-X', 'utf8', $Serve, $ProjectDir)
+$Arguments = @('-X', 'utf8', $Serve)
+if ($ProjectDir) { $Arguments += $ProjectDir }
 if ($Port -gt 0) { $Arguments += @('--port', "$Port") }
 if ($NoOpen) { $Arguments += '--no-open' }
 Write-Host "启动看板..."

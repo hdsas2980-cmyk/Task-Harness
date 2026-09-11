@@ -9,16 +9,17 @@ const code = fs.readFileSync(jsTemplatePath,'utf8');
 assert.match(html, /载入任务/);
 assert.match(html, /刷新任务/);
 assert.match(html, /\.\/app\.js/);
-assert.match(code, /选择项目任务目录/);
-assert.match(code, /showDirectoryPicker/);
-assert.doesNotMatch(code, /isTauri|__TAURI__|probe_harness_dir/);
-assert.match(code, /api\/snapshot/);
+assert.match(html, /load-drawer/);
+assert.match(html, /从 Codex 会话选择/);
+assert.match(code, /api\/sessions/);
+assert.match(code, /api\/source/);
+assert.match(code, /bootstrapSource/);
+assert.doesNotMatch(code, /showDirectoryPicker|isTauri|__TAURI__|probe_harness_dir/);
 assert.match(code, /startPoll/);
-assert.match(code, /正在选择项目任务目录/);
 assert.doesNotMatch(html, /载入示例|清空|type="file"|__HARNESS_SNAPSHOT__|id="snapshot"/);
 
 function node(id, nodes){
-  if(!nodes.has(id)) nodes.set(id,{textContent:'',innerHTML:'',value:'',checked:false,disabled:false,classList:{toggle(){},add(){},remove(){}},addEventListener(){},insertAdjacentHTML(_,text){this.innerHTML+=text;},click(){this.clicked=true;},matches(){return false;},closest(){return null;}});
+  if(!nodes.has(id)) nodes.set(id,{textContent:'',innerHTML:'',value:'',checked:false,disabled:false,hidden:true,classList:{toggle(){},add(){},remove(){}},addEventListener(){},insertAdjacentHTML(_,text){this.innerHTML+=text;},click(){this.clicked=true;},focus(){},matches(){return false;},closest(){return null;},querySelectorAll(){return [];}});
   return nodes.get(id);
 }
 
@@ -26,8 +27,14 @@ function run(extras){
   const nodes = new Map();
   const n = id => node(id, nodes);
   n('search').value='';
+  n('load-path').value='';
+  n('load-q').value='';
+  n('load-harness-only').checked=false;
+  n('load-drawer').hidden=true;
+  n('load-list').querySelectorAll = () => [];
   const listeners = {};
   const store = Object.assign({}, extras.store || {});
+  const fetches = [];
   const scope = {
     document:{getElementById:n,querySelector(){return {addEventListener(){}};},hidden:false,addEventListener(type,fn){listeners[type]=fn;}},
     window: extras.window || {},
@@ -41,20 +48,21 @@ function run(extras){
       setItem(k,v){ store[k] = String(v); },
       removeItem(k){ delete store[k]; }
     },
-    fetch: extras.fetch || (()=>{ scope.fetches++; throw Error('file protocol blocked'); }),
+    fetch: extras.fetch || (async (url, opts)=>{ fetches.push({url:String(url), opts}); throw Error('file protocol blocked'); }),
     reloads:0,
-    fetches:0,
+    fetches,
     calls:[]
   };
   if(extras.window) scope.window = extras.window;
+  if(extras.fetch) scope.fetch = extras.fetch;
   vm.createContext(scope);
   vm.runInContext(code, scope);
-  return {scope, node:n, store, nodes};
+  return {scope, node:n, store, nodes, fetches};
 }
 
 (async()=>{
   const file = run({});
-  assert.match(file.node('status').textContent,/选择项目任务目录/);
+  assert.match(file.node('status').textContent,/start\.ps1|file:\/\//);
   assert.doesNotMatch(file.node('tasks').innerHTML,/<img/);
   assert.equal(vm.runInContext('model.tasks.tasks.length',file.scope),0);
   const before=vm.runInContext('JSON.stringify(model)',file.scope);
@@ -63,37 +71,40 @@ function run(extras){
   assert.throws(()=>vm.runInContext('parse({"tasks.json":JSON.stringify({tasks:[{id:"x",status:"bad"}]})})',file.scope));
   assert.throws(()=>vm.runInContext('parse({"tasks.json":JSON.stringify({tasks:[]}),"reviews.jsonl":"[]"})',file.scope));
   await file.node('load').onclick();
-  assert.equal(file.scope.fetches,0);
-  assert.match(file.node('status').textContent,/选择项目任务目录|桌面壳|载入任务/);
-  await file.node('refresh').onclick();
-  assert.equal(file.scope.reloads,0);
-  assert.equal(file.scope.fetches,0);
+  assert.equal(file.fetches.length,0);
+  assert.match(file.node('status').textContent,/start\.ps1|file:\/\//);
 
-  file.scope.location.protocol='http:';
-  file.scope.location.href='http://127.0.0.1:8765/task-harness.html';
-  file.scope.fetch=async url=>{file.scope.fetches++; return {ok:true,status:200,text:async()=>String(url).endsWith('tasks.json')?JSON.stringify({project:'live',tasks:[{id:'updated',status:'active',priority:1}]}):''};};
-  await file.node('load').onclick();
-  assert.match(file.node('tasks').innerHTML,/updated/);
-  assert.match(file.node('status').textContent,/已载入当前项目任务/);
-  assert.match(file.node('tasks').innerHTML,/进行中/);
-  const fakeDir = {
-    name:'demo',
-    async getFileHandle(name){
-      if(name!=='tasks.json') throw Error('missing');
-      return {async getFile(){ return {async text(){ return JSON.stringify({project:'picked',tasks:[{id:'picked-1',status:'blocked',priority:1,desc:'from dir'}]}); }}; }};
-    },
-    async getDirectoryHandle(){ throw Error('no nested'); }
+  const httpFetches = [];
+  const httpFetch = async (url, opts)=>{
+    httpFetches.push({url:String(url), method:(opts && opts.method) || 'GET', body:opts && opts.body});
+    const u = String(url);
+    if(u.includes('/api/snapshot')){
+      return {ok:true, status:200, text:async()=>JSON.stringify({source:null, files:{}})};
+    }
+    if(u.includes('/api/sessions')){
+      return {ok:true, status:200, text:async()=>JSON.stringify({
+        sessions_dir:'C:/users/me/.codex/sessions',
+        suggested:null,
+        projects:[{cwd:'E:/proj', source:'E:/proj/.harness', has_harness:true, task_count:1, latest_title:'演示', session_count:1, latest:'2026-09-11T12:00:00Z', sessions:[]}]
+      })};
+    }
+    if(u.includes('/api/source')){
+      return {ok:true, status:200, text:async()=>JSON.stringify({source:'E:/proj/.harness', files:{'tasks.json':JSON.stringify({project:'演示',tasks:[{id:'picked-1',status:'blocked',priority:1,desc:'from session'}]})}})};
+    }
+    return {ok:false, status:404, text:async()=>'{}'};
   };
-  let picks=0;
-  file.scope.window.showDirectoryPicker = async ()=>{ picks++; return fakeDir; };
-  await file.node('load').onclick();
-  assert.equal(picks,1);
-  assert.match(file.node('tasks').innerHTML,/picked-1/);
-  assert.match(file.node('status').textContent,/已载入/);
-  assert.match(file.node('project').textContent,/demo/);
-  file.scope.fetch=async url=>{file.scope.fetches++; return {ok:true,status:200,text:async()=>String(url).endsWith('tasks.json')?JSON.stringify({project:'live',tasks:[{id:'a',desc:'<img src=x onerror=alert(1)>',status:'passed',priority:1},{id:'b',status:'pending',depends_on:['a'],priority:2}]}):''};};
-  await file.node('refresh').onclick();
-  assert.match(file.node('tasks').innerHTML,/已阻塞|门禁缺口|picked-1|已通过/);
+  const http = run({
+    location:{protocol:'http:',href:'http://127.0.0.1:8765/',reload(){}},
+    fetch: httpFetch
+  });
+  await new Promise(r=>setTimeout(r, 20));
+  await http.node('load').onclick();
+  assert.ok(httpFetches.some(x=>x.url.includes('/api/sessions')));
+  assert.equal(http.node('load-drawer').hidden, false);
+  await vm.runInContext('applySource("E:/proj/.harness","已根据会话载入")', http.scope);
+  assert.match(http.node('tasks').innerHTML,/picked-1/);
+  assert.match(http.node('status').textContent,/已根据会话载入|已载入/);
+  assert.match(http.node('project').textContent,/proj/);
 
   console.log('UI logic: assertions passed (mock DOM; not browser visual verification)');
 })().catch(e=>{console.error(e);process.exitCode=1;});
