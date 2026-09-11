@@ -1,0 +1,26 @@
+[package]
+name = "task-harness-dashboard"
+version = "3.1.0"
+description = "Standalone Task Harness operator board"
+authors = ["Task Harness contributors"]
+edition = "2021"
+
+[[bin]]
+name = "TaskHarness"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+rfd = "0.16"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = "z"
+strip = true

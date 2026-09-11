@@ -1,0 +1,8 @@
+{
+  "identifier": "default",
+  "description": "main window can pick a folder and read harness files via commands",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

@@ -2,3 +2,7 @@ __pycache__/
 *.py[cod]
 _upstream/
 _build/
+
+dashboard/node_modules/
+dashboard/src-tauri/target/
+dashboard/src-tauri/gen/

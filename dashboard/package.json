@@ -1,0 +1,14 @@
+{
+  "name": "task-harness-dashboard",
+  "private": true,
+  "version": "3.1.0",
+  "description": "Portable Task Harness operator board (single exe, no installer)",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build --no-bundle",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

@@ -219,7 +219,9 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("type=\"file\"", text)
         self.assertIn("刷新任务", text)
         self.assertIn("评审未通过", text)
-        self.assertIn("http://127.0.0.1", text)
+        self.assertIn("选择项目任务目录", text)
+        self.assertTrue((ROOT / "dashboard/ui/index.html").exists())
+        self.assertEqual(text, (ROOT / "dashboard/ui/index.html").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

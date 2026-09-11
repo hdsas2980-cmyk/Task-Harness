@@ -49,8 +49,17 @@ def resolve_paths(project):
     return output, source
 
 
+def spa_source():
+    here = Path(__file__).resolve()
+    standalone = here.parents[2] / "dashboard" / "ui" / "index.html"
+    sibling = here.with_name("task-harness.html")
+    if standalone.is_file():
+        return standalone
+    return sibling
+
+
 def copy_spa(output):
-    src = Path(__file__).with_name("task-harness.html")
+    src = spa_source()
     if not src.is_file():
         raise ValueError("缺少看板页面: " + str(src))
     output.mkdir(parents=True, exist_ok=True)
