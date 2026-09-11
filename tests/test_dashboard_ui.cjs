@@ -7,7 +7,10 @@ assert.match(html, /载入任务/);
 assert.match(html, /刷新任务/);
 assert.match(html, /http:\/\/127\.0\.0\.1/);
 assert.doesNotMatch(html, /载入示例|清空|type="file"|showDirectoryPicker|选择任务目录|__HARNESS_SNAPSHOT__|id="snapshot"/);
-const code = html.match(/<script>\n([\s\S]*?)<\/script>/)[1];
+// 行尾无关：Windows 上 core.autocrlf=true 会检出 CRLF，而 Node 不像 Python 那样做
+// universal-newline 归一化 —— `<script>\r\n` 匹配不到 `/<script>\n/`，整个测试会以
+// "Cannot read properties of null" 挂掉。所以这里不假设 `<script>` 后面紧跟 `\n`。
+const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const tasks = {project:'测试项目',rev:1,tasks:[
   {id:'a',desc:'<img src=x onerror=alert(1)>',status:'passed',depends_on:[],priority:1},
   {id:'b',status:'pending',depends_on:['a'],priority:2,desc:'下一步'}

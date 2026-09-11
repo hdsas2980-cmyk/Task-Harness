@@ -105,7 +105,33 @@ nav button[aria-current=page] svg{color:var(--ink)}
 .legend li{display:flex;align-items:center;min-width:0;font-size:11.5px;color:var(--muted)}
 .legend li .dot{margin-right:7px}
 .legend p{margin:0 0 3px;font-size:11.5px;color:var(--faint)}
-.legend p:last-child{margin-bottom:0}
+  .legend p:last-child{margin-bottom:0}
+  /* 状态词典：不只给词，还给"这个词到底什么意思" */
+  .legend ul{grid-template-columns:1fr}
+  .legend li{display:block;line-height:1.45;margin-bottom:4px}
+  .legend li .dot{display:inline-block;vertical-align:middle}
+  .legend li em{display:block;margin-left:14px;font-style:normal;color:var(--faint);font-size:11px}
+  /* 项目地图：回答"我现在站在哪 / 对不对 / 下一步做什么" */
+  .map{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px 16px;margin-bottom:12px}
+  .map-head{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+  .map-head h2{margin:0;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)}
+  .map-head span{font-size:11px;color:var(--faint)}
+  .map .where{margin:2px 0 10px;font-size:13.5px;color:var(--ink)}
+  .map h3{margin:12px 0 6px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)}
+  .map p{margin:0 0 6px}
+  .cap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px}
+  .cap{display:flex;align-items:center;gap:8px;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:5px 9px;background:var(--surface-2);min-width:0}
+  .cap span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cap .s{font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;white-space:nowrap}
+  .cap.usable .s{background:oklch(93% 0.06 150);color:oklch(36% 0.12 150)}
+  .cap.partial .s{background:oklch(94% 0.07 80);color:oklch(40% 0.12 70)}
+  .cap.shell .s,.cap.missing .s{background:oklch(93% 0.004 80);color:var(--muted)}
+  .map-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .map ul{margin:0;padding-left:16px}
+  .map li{font-size:12.5px;color:var(--ink-2);margin:4px 0}
+  .map li b{color:var(--ink)}
+  .map .src{color:var(--faint);font-size:11.5px}
+  .map li.lim{color:oklch(45% 0.12 40)}
 .keys{padding-top:14px;border-top:1px solid var(--line)}
 .keys p{display:flex;justify-content:space-between;gap:8px;margin:0 0 6px;font-size:11.5px;color:var(--faint)}
 .keys p:last-child{margin-bottom:0}
@@ -251,6 +277,128 @@ details.log pre{margin:0;padding:0 16px 14px;white-space:pre-wrap;word-break:bre
 @media(prefers-reduced-motion:reduce){
   *{transition:none !important;animation:none !important}
 }
+
+.app{display:grid;grid-template-columns:212px minmax(0,1fr) 300px;grid-template-rows:46px minmax(0,1fr) 28px;height:100vh}
+.rail{grid-column:1;grid-row:1/-1;display:flex;flex-direction:column;gap:18px;padding:16px 14px;min-width:0;overscroll-behavior:contain}
+.slot{flex:1;min-height:72px}
+.top{grid-column:2/4;display:flex;align-items:center;gap:9px;padding:0 16px}
+.main{grid-column:2;grid-row:2;display:flex;flex-direction:column;gap:0;padding:0 16px 12px;min-height:0;min-width:0}
+.tabs{display:flex;gap:2px;padding:0 0 10px;flex:none}
+.tabs button{height:30px;padding:0 12px;border-radius:var(--r-sm);color:var(--muted);font-size:13px}
+.tabs button:hover{background:var(--hover);color:var(--ink)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line);font-weight:500}
+.panel[hidden]{display:none}
+.cards{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;padding:0 14px 14px;align-content:start}
+.tcard{display:flex;flex-direction:column;gap:8px;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);cursor:pointer;text-align:left;min-width:0}
+.tcard:hover{border-color:var(--line-2);background:var(--hover)}
+.tcard[aria-selected="true"]{border-color:var(--accent-edge);background:var(--accent-wash);box-shadow:inset 3px 0 0 var(--accent)}
+.tcard .row{display:flex;align-items:center;gap:8px;min-width:0}
+.tcard .id{font:500 13px/1.2 var(--mono);color:var(--ink)}
+.tcard .pri{margin-left:auto;font:400 11px/1 var(--mono);color:var(--faint)}
+.tcard .state{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+.tcard .desc{margin:0;font-size:12.5px;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tcard .meta{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11.5px;color:var(--muted)}
+.tcard .cmd{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tcard .wave{padding:1px 6px;border:1px solid var(--line);border-radius:999px;font-size:11px}
+.flag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11px;background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+.flag.warn{color:var(--danger);border-color:color-mix(in oklch,var(--danger) 40%,var(--line))}
+.empty{grid-column:1/-1;padding:28px 12px;text-align:center;color:var(--faint)}
+.gantt-head{display:flex;align-items:center;gap:12px;padding:11px 16px;flex:none;border-bottom:1px solid var(--line)}
+.gantt-key{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:11.5px;color:var(--muted)}
+.gantt-key span{display:inline-flex;align-items:center;gap:6px}
+.gantt{flex:1;min-height:0;overflow:auto;padding:10px 14px 16px}
+.lane{margin:0 0 14px}
+.lane h3{display:flex;align-items:center;gap:10px;margin:0 0 8px;font:500 12px/1 var(--sans);color:var(--ink-2)}
+.lane h3 b{font:500 12px/1 var(--mono)}
+.lane-meter{flex:1;height:8px;border-radius:99px;background:var(--line);overflow:hidden;min-width:80px}
+.lane-meter i{display:block;height:100%;background:var(--st-passed)}
+.lane-stat{font:400 11.5px/1 var(--mono);color:var(--faint);flex:none}
+.g-row{display:flex;align-items:center;gap:8px;padding:3px 0}
+.g-row .id{width:168px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 12px/1.2 var(--mono);cursor:pointer}
+.track{flex:1;min-width:120px;height:18px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;cursor:pointer}
+.track>i{display:block;height:100%;border-radius:inherit}
+.g-row[aria-selected="true"] .id{color:var(--accent)}
+.g-row[aria-selected="true"] .track{box-shadow:0 0 0 2px var(--accent-edge)}
+.g-state{width:72px;flex:none;font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.side{display:flex;flex-direction:column;grid-column:3;grid-row:2;min-height:0;overflow:auto;padding:0 16px 12px 0}
+.statusbar{grid-column:2/4;grid-row:3}
+.hero-line{display:flex;flex-direction:column;gap:4px;min-width:0}
+.hero-id{font:500 16px/1.2 var(--mono);letter-spacing:-0.02em;color:var(--accent);word-break:break-all}
+.hero-desc{font-size:13px;font-weight:500;color:var(--ink);white-space:normal}
+.next-extra{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.next-extra .where{margin:0 0 8px;font-size:12.5px;color:var(--ink-2)}
+.next-extra ul{margin:0;padding-left:16px}
+.next-extra li{font-size:12.5px;color:var(--ink-2);margin:4px 0}
+.next-extra li b{color:var(--ink)}
+.next-extra .src{color:var(--faint);font-size:11.5px}
+@media(max-width:1100px){
+  .app{grid-template-columns:212px minmax(0,1fr);grid-template-rows:46px minmax(0,1fr) minmax(220px,.42fr) 28px}
+  .top{grid-column:2}
+  .main{grid-column:2;grid-row:2}
+  .side{display:flex;grid-column:2;grid-row:3;padding:0 16px 12px}
+  .statusbar{grid-column:2;grid-row:4}
+}
+@media(max-width:720px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) minmax(220px,.5fr) 28px}
+  .rail{grid-column:1;grid-row:1;flex-direction:row;flex-wrap:wrap;gap:10px;padding:10px 12px}
+  nav[aria-label="任务视图"]{flex-direction:row;flex-wrap:wrap;width:100%}
+  nav button{width:auto}
+  .slot,.keys{display:none}
+  .top{grid-column:1;grid-row:2;flex-wrap:wrap;height:auto;padding:8px 12px}
+  .main{grid-column:1;grid-row:3;padding:0 12px 12px}
+  .side{grid-column:1;grid-row:4;padding:0 12px 12px}
+  .statusbar{grid-column:1;grid-row:5}
+}
+
+.app{display:grid;grid-template-columns:240px minmax(0,1fr);grid-template-rows:46px minmax(0,1fr) 28px;height:100vh}
+.top{grid-column:2;display:flex;align-items:center;gap:9px;padding:0 16px}
+.main{grid-column:2;grid-row:2;display:flex;flex-direction:column;gap:0;padding:0 16px 12px;min-height:0;min-width:0}
+.statusbar{grid-column:2;grid-row:3}
+.side{display:none !important}
+.rail-detail{flex:1;min-height:0;overflow:auto;padding:10px 10px 8px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface)}
+.rail-detail h2{margin-bottom:8px}
+.rail-detail .detail{font-size:12.5px}
+.rail-detail .detail .id{font:500 13px/1.3 var(--mono);word-break:break-all}
+.rail-detail .detail p{margin:0 0 6px}
+.next-panel{padding:16px;overflow:auto}
+.next-panel .hero{height:auto;flex:none;background:transparent;border:0;padding:4px 8px 12px 18px}
+.next-panel .hero-id{font:500 28px/1.15 var(--mono)}
+.next-panel .hero-desc{font-size:16px;white-space:normal}
+.next-panel .hero-line{flex-direction:column;align-items:flex-start;gap:6px}
+.log-panel{display:flex;flex-direction:column;min-height:0}
+.log-head{padding:12px 16px;border-bottom:1px solid var(--line);flex:none}
+.log-head h2{margin:0}
+.log-panel pre{margin:0;padding:14px 16px;flex:1;min-height:0;overflow:auto;font:12px/1.5 var(--mono);color:var(--ink-2);white-space:pre-wrap}
+.drawer[hidden]{display:none}
+.drawer{position:fixed;inset:0;z-index:40}
+.drawer-mask{position:absolute;inset:0;background:oklch(20% 0.01 80 / .35)}
+.drawer-panel{position:absolute;top:0;right:0;bottom:0;width:min(380px,92vw);background:var(--surface);border-left:1px solid var(--line);box-shadow:-12px 0 32px oklch(20% 0.01 80 / .12);display:flex;flex-direction:column}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
+.drawer-head h2{margin:0;font:500 13px/1 var(--sans);letter-spacing:.04em;color:var(--ink)}
+.drawer-head .btn-icon{width:28px;height:28px;font-size:18px;line-height:1}
+.drawer-body{flex:1;min-height:0;overflow:auto;padding:8px 16px 16px}
+@media(max-width:1100px){
+  .app{grid-template-columns:212px minmax(0,1fr);grid-template-rows:46px minmax(0,1fr) 28px}
+  .top,.main,.statusbar{grid-column:2}
+  .main{grid-row:2}
+  .statusbar{grid-row:3}
+  .side{display:none !important}
+}
+@media(max-width:720px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) 28px}
+  .rail{grid-column:1;grid-row:1;flex-direction:row;flex-wrap:wrap;gap:10px;padding:10px 12px}
+  nav[aria-label="任务视图"]{flex-direction:row;flex-wrap:wrap;width:100%}
+  nav button{width:auto}
+  .rail-detail{width:100%;max-height:160px}
+  .keys{display:none}
+  .top{grid-column:1;grid-row:2;flex-wrap:wrap;height:auto;padding:8px 12px}
+  .main{grid-column:1;grid-row:3;padding:0 12px 12px}
+  .statusbar{grid-column:1;grid-row:4}
+}
+
+nav[aria-label="任务视图"] button{height:auto;min-height:44px;padding:7px 9px;align-items:center}
+nav[aria-label="任务视图"] button .nav-txt{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13px;font-weight:500;color:inherit}
+nav[aria-label="任务视图"] button .nav-txt em{font:400 11px/1.3 var(--sans);color:var(--faint);font-style:normal}
 </style>
 </head>
 <body>
@@ -258,24 +406,19 @@ details.log pre{margin:0;padding:0 16px 14px;white-space:pre-wrap;word-break:bre
   <aside class="rail">
     <div class="brand">
       <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 13h10M4 19h6"/></svg></span>
-      <span class="txt">
-        <b>长任务看板</b>
-      </span>
+      <span class="txt"><b>长任务看板</b></span>
     </div>
     <nav aria-label="任务视图" id="rail-nav">
-      <button type="button" data-filter="all"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h.01M3 12h.01M3 18h.01M8.5 6H21M8.5 12H21M8.5 18H21"/></svg><span>工作队列</span><b id="c-all">0</b></button>
-      <button type="button" data-filter="eligible"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg><span>可推进</span><b id="c-eligible">0</b></button>
-      <button type="button" data-filter="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3.5l2.5-6 3.5 12 2.5-6h6"/></svg><span>进行中</span><b id="c-active">0</b></button>
-      <button type="button" data-filter="evidence_ready"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg><span>待独立评审</span><b id="c-evidence_ready">0</b></button>
-      <button type="button" data-filter="blocked"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5M12 16h.01"/></svg><span>已阻塞</span><b id="c-blocked">0</b></button>
+      <button type="button" data-filter="blocked"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5M12 16h.01"/></svg><span class="nav-txt">已阻塞<em>卡住了，先解开</em></span><b id="c-blocked">0</b></button>
+      <button type="button" data-filter="evidence_ready"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg><span class="nav-txt">待评审<em>验过才算完成</em></span><b id="c-evidence_ready">0</b></button>
+      <button type="button" data-filter="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3.5l2.5-6 3.5 12 2.5-6h6"/></svg><span class="nav-txt">进行中<em>正在做，还没交</em></span><b id="c-active">0</b></button>
+      <button type="button" data-filter="eligible"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg><span class="nav-txt">可推进<em>现在就能开工</em></span><b id="c-eligible">0</b></button>
+      <button type="button" data-filter="all"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h.01M3 12h.01M3 18h.01M8.5 6H21M8.5 12H21M8.5 18H21"/></svg><span class="nav-txt">全部任务<em>不筛选，看全集</em></span><b id="c-all">0</b></button>
     </nav>
-    <div class="legend">
-      <h2>状态</h2>
-      <ul id="legend-list"></ul>
-      <p>评审未通过 › 进行中</p>
-      <p>已通过失效 › 需回归</p>
-    </div>
-    <div class="spacer"></div>
+    <section class="rail-detail" aria-label="当前行">
+      <h2>当前行</h2>
+      <div class="detail" id="detail"></div>
+    </section>
     <div class="keys">
       <h2>键盘</h2>
       <p><span>载入 / 刷新</span><span><kbd>L</kbd> <kbd>R</kbd></span></p>
@@ -291,28 +434,20 @@ details.log pre{margin:0;padding:0 16px 14px;white-space:pre-wrap;word-break:bre
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.2"/><path d="M20 20l-3.7-3.7"/></svg>
       <input class="search" id="search" type="search" aria-label="搜索任务" placeholder="搜索编号、描述、验证命令">
     </label>
+    <button class="btn" id="events-open" type="button">证据与评审</button>
     <button class="btn btn-solid" id="load" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 20h15"/></svg>载入任务 <kbd>L</kbd></button>
     <button class="btn" id="refresh" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1M20.5 4.2v5h-5"/></svg>刷新任务 <kbd>R</kbd></button>
   </header>
 
   <main class="main">
-    <section class="hero is-empty" id="hero-card" aria-label="下一步要做的任务">
-      <p class="hero-label">下一步</p>
-      <div class="hero-line">
-        <span class="hero-id" id="hero-id">—</span>
-        <span class="hero-desc" id="hero-desc">尚未编排任务</span>
-      </div>
-      <div class="hero-meta" id="hero-dep">—</div>
-      <div class="hero-run">
-        <span class="run-label">验证命令</span>
-        <code class="run-cmd" id="hero-cmd">—</code>
-        <button id="copy" class="btn-icon" type="button" aria-label="复制验证命令" title="复制验证命令">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.2"/><path d="M15.5 8.5V6a2.2 2.2 0 0 0-2.2-2.2H6A2.2 2.2 0 0 0 3.8 6v7.3A2.2 2.2 0 0 0 6 15.5h2.5"/></svg>
-        </button>
-      </div>
-    </section>
+    <div class="tabs" id="view-tabs" role="tablist" aria-label="任务视图切换">
+      <button type="button" role="tab" id="tab-btn-next" data-tab="next" aria-controls="tab-next" aria-selected="true">下一步看板</button>
+      <button type="button" role="tab" id="tab-btn-list" data-tab="list" aria-controls="tab-list" aria-selected="false">任务列表</button>
+      <button type="button" role="tab" id="tab-btn-gantt" data-tab="gantt" aria-controls="tab-gantt" aria-selected="false">进度时间线</button>
+      <button type="button" role="tab" id="tab-btn-log" data-tab="log" aria-controls="tab-log" aria-selected="false">进度日志</button>
+    </div>
 
-    <section class="panel">
+    <section class="panel" id="tab-list" role="tabpanel" aria-labelledby="tab-btn-list" hidden>
       <div class="tools">
         <span class="filter-chip" id="filter-chip" hidden></span>
         <div class="grow"></div>
@@ -325,41 +460,61 @@ details.log pre{margin:0;padding:0 16px 14px;white-space:pre-wrap;word-break:bre
         </label>
         <span class="hint" id="count"></span>
       </div>
-      <div class="table-wrap">
-        <table aria-label="任务队列">
-          <colgroup>
-            <col style="width:14%"><col style="width:12%"><col style="width:8%"><col style="width:24%">
-            <col style="width:14%"><col style="width:18%"><col style="width:10%">
-          </colgroup>
-          <thead><tr>
-            <th scope="col">编号</th><th scope="col">状态</th><th scope="col" class="num">优先级</th>
-            <th scope="col">描述</th><th scope="col">依赖</th><th scope="col">验证命令</th><th scope="col">门禁</th>
-          </tr></thead>
-          <tbody id="tasks"></tbody>
-        </table>
+      <div class="cards" id="tasks"></div>
+    </section>
+
+    <section class="panel" id="tab-gantt" role="tabpanel" aria-labelledby="tab-btn-gantt" hidden>
+      <div class="gantt-head">
+        <div class="gantt-key" id="gantt-key"></div>
+        <span class="grow"></span>
+        <span class="hint" id="gantt-count"></span>
       </div>
+      <div class="gantt" id="gantt"></div>
+    </section>
+
+    <section class="panel next-panel" id="tab-next" role="tabpanel" aria-labelledby="tab-btn-next">
+      <section class="hero is-empty" id="hero-card" aria-label="下一步看板">
+        <p class="hero-label">下一步看板</p>
+        <div class="hero-line">
+          <span class="hero-id" id="hero-id">—</span>
+          <span class="hero-desc" id="hero-desc">尚未编排任务</span>
+        </div>
+        <div class="hero-meta" id="hero-dep">—</div>
+        <div class="hero-run">
+          <span class="run-label">验证命令</span>
+          <code class="run-cmd" id="hero-cmd">—</code>
+          <button id="copy" class="btn-icon" type="button" aria-label="复制验证命令" title="复制验证命令">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.2"/><path d="M15.5 8.5V6a2.2 2.2 0 0 0-2.2-2.2H6A2.2 2.2 0 0 0 3.8 6v7.3A2.2 2.2 0 0 0 6 15.5h2.5"/></svg>
+          </button>
+        </div>
+        <div class="next-extra" id="map-card" hidden>
+          <p class="where" id="map-where"></p>
+          <div id="map-next"></div>
+        </div>
+      </section>
+    </section>
+
+    <section class="panel log-panel" id="tab-log" role="tabpanel" aria-labelledby="tab-btn-log" hidden>
+      <div class="log-head"><h2>进度日志</h2></div>
+      <pre id="progress"></pre>
     </section>
   </main>
-
-  <aside class="side">
-    <section class="card">
-      <h2>当前行</h2>
-      <div class="detail" id="detail"></div>
-    </section>
-    <section class="card">
-      <h2>最近证据与评审</h2>
-      <div id="events"></div>
-    </section>
-    <details class="card log">
-      <summary>进度日志</summary>
-      <pre id="progress"></pre>
-    </details>
-  </aside>
 
   <footer class="statusbar">
     <div class="status" id="status" role="status" aria-live="polite"></div>
     <span class="ro">http://127.0.0.1 · 只读，不写任务真相源</span>
   </footer>
+</div>
+
+<div class="drawer" id="events-drawer" hidden>
+  <div class="drawer-mask" data-close-drawer="1"></div>
+  <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="events-title">
+    <div class="drawer-head">
+      <h2 id="events-title">最近证据与评审</h2>
+      <button class="btn-icon" id="events-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="drawer-body" id="events"></div>
+  </aside>
 </div>
 <script>
 'use strict';
@@ -367,10 +522,20 @@ const $ = id => document.getElementById(id);
 const labels = {pending:'待处理',active:'进行中',evidence_ready:'待独立评审',passed:'已通过',blocked:'已阻塞',regressed:'需回归'};
 const colors = {pending:'var(--st-pending)',active:'var(--st-active)',evidence_ready:'var(--st-ready)',passed:'var(--st-passed)',blocked:'var(--st-blocked)',regressed:'var(--st-regressed)'};
 const states = Object.keys(labels);
-const optional = ['evidence.jsonl','reviews.jsonl','progress.txt'];
-const views = [['all','工作队列'],['eligible','可推进'],['active','进行中'],['evidence_ready','待独立评审'],['blocked','已阻塞']];
-let model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:''};
-let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '';
+const optional = ['evidence.jsonl','reviews.jsonl','progress.txt','board.json'];
+const views = [['blocked','已阻塞'],['evidence_ready','待评审'],['active','进行中'],['eligible','可推进'],['all','全部任务']];
+let model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:'',board:null};
+// 状态词典：每个词对"人"到底意味着什么 —— 尤其 evidence_ready 最容易误读。
+const means = {
+  pending:'还没开始',
+  active:'正在做，还没交',
+  evidence_ready:'做完了，但还没有独立评审确认 —— 既不是"做完"也不是"没做完"，是"等人验"',
+  passed:'独立评审通过 —— 只有这个状态能叫"完成"',
+  blocked:'卡住了（原因记在任务里，通常是环境缺失）',
+  regressed:'曾经通过，但因依赖/接口变更失效，需要重做'
+};
+const fillOf = {pending:8,active:42,evidence_ready:78,passed:100,blocked:28,regressed:55};
+let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'next';
 let chain = Promise.resolve(), statusTimer = null;
 const timers = {
   set(fn, ms){ if(typeof setTimeout === 'function'){ timers.id = setTimeout(fn, ms); } },
@@ -406,9 +571,33 @@ function parse(texts){
       }
     });
   }
-  return {tasks, evidence:jsonl('evidence.jsonl'), reviews:jsonl('reviews.jsonl'), progress:texts['progress.txt'] || ''};
+  return {tasks, evidence:jsonl('evidence.jsonl'), reviews:jsonl('reviews.jsonl'), progress:texts['progress.txt'] || '', board:parseBoard(texts['board.json'])};
 }
-function install(texts, source){ model = parse(texts); render(); status(source + ' · ' + new Date().toLocaleTimeString('zh-CN')); }
+function parseBoard(raw){
+  try{
+    const o = JSON.parse(String(raw || '').replace(/^\uFEFF/,''));
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null;
+  }catch{ return null; }   // 地图是可选视图，坏了不影响任务队列
+}
+function install(texts, source){ model = parse(texts); render(); renderMap(); status(source + ' · ' + new Date().toLocaleTimeString('zh-CN')); }
+
+/* 项目地图：回答"我现在站在哪 / 对不对 / 下一步做什么"。
+   数据来自可选的 .harness/board.json —— 缺了就不显示，不影响任务队列。 */
+function renderMap(){
+  const card = $('map-card'); if(!card) return;
+  const b = model.board;
+  if(!b || !(b.where || (b.next && b.next.length))){ card.hidden = true; return; }
+  card.hidden = false;
+  const where = $('map-where');
+  if(where) where.textContent = b.where || '';
+  const nextEl = $('map-next');
+  if(nextEl){
+    const next = b.next || [];
+    nextEl.innerHTML = next.length ? '<ul>' + next.map(n=>'<li><b>' + esc(n.task) + '</b> —— 为什么是它：' + esc(n.why || '未写')
+      + (n.see ? '<br><span class="src">做完你会看到：' + esc(n.see) + '</span>' : '') + '</li>').join('') + '</ul>'
+      : '';
+  }
+}
 function gate(t){
   if(t.status !== 'passed') return '';
   const r = model.reviews.filter(r=>r.task === t.id).at(-1);
@@ -426,6 +615,87 @@ function depMarkup(byId, deps){
   if(!deps.length) return '<span class="none" title="无依赖">—</span>';
   const done = deps.filter(d=>byId.get(d)?.status === 'passed').length;
   return '<span class="bar" title="依赖 ' + done + '/' + deps.length + ' 已通过"><i style="width:' + (done/deps.length*100) + '%"></i></span>';
+}
+function waveOf(t){ return t.wave || ('阶段 ' + (t.phase ?? '未分组')); }
+function setTab(tab){
+  const tabs = ['list','gantt','next','log'];
+  mainTab = tabs.indexOf(tab) >= 0 ? tab : 'next';
+  for(const id of tabs){
+    const panel = $('tab-' + id);
+    if(panel) panel.hidden = mainTab !== id;
+    const btn = $('tab-btn-' + id);
+    if(btn && btn.setAttribute) btn.setAttribute('aria-selected', String(mainTab === id));
+  }
+}
+function openEvents(){
+  const d = $('events-drawer');
+  if(d) d.hidden = false;
+}
+function closeEvents(){
+  const d = $('events-drawer');
+  if(d) d.hidden = true;
+}
+function renderCards(rows, byId){
+  const tasksEl = $('tasks');
+  if(!tasksEl) return;
+  tasksEl.innerHTML = rows.map((t,i)=>{
+    const tDeps = t.depends_on || [];
+    const depText = tDeps.map(d=>d + '/' + (byId.has(d) ? labels[byId.get(d).status] : '缺失')).join('、') || '无';
+    const g = gate(t);
+    const cell = g
+      ? (g.startsWith('门禁')
+          ? '<span class="flag warn" title="' + esc(g) + '">门禁缺口</span>'
+          : '<span class="flag" title="' + esc(g) + '">已关联</span>')
+      : '';
+    const title = t.desc || t.description || '';
+    return '<article class="tcard" data-i="' + i + '" aria-selected="' + (i === selected) + '">'
+      + '<div class="row"><span class="id">' + esc(t.id) + '</span><span class="pri">P' + esc(t.priority ?? '—') + '</span></div>'
+      + '<div class="state"><i class="dot" style="background:' + colors[t.status] + '" aria-hidden="true"></i>' + labels[t.status] + '</div>'
+      + '<p class="desc" title="' + esc(title) + '">' + esc(title || '未填写') + '</p>'
+      + '<div class="meta">'
+      + (t.wave || t.phase != null ? '<span class="wave">' + esc(waveOf(t)) + '</span>' : '')
+      + '<span>依赖 ' + depMarkup(byId, tDeps) + ' ' + esc(depText === '无' ? '无' : tDeps.length + ' 项') + '</span>'
+      + '<span class="cmd mono" title="' + esc(t.verify || '') + '">' + esc(t.verify || '未填写') + '</span>'
+      + cell
+      + '</div></article>';
+  }).join('') || '<div class="empty">暂无匹配任务。按 L 载入当前项目，按 R 刷新。</div>';
+}
+function renderGantt(rows){
+  const keyEl = $('gantt-key');
+  if(keyEl){
+    keyEl.innerHTML = states.map(s=>'<span><i class="dot" style="background:' + colors[s] + '"></i>' + esc(labels[s]) + '</span>').join('')
+      + '<span>实心长条 = 已通过 · 短条 = 未完成</span>';
+  }
+  setText('gantt-count', rows.length + ' 条 · 按 Wave 分组，条长表示完成度');
+  const ganttEl = $('gantt');
+  if(!ganttEl) return;
+  if(!rows.length){
+    ganttEl.innerHTML = '<div class="empty">暂无匹配任务。按 L 载入当前项目，按 R 刷新。</div>';
+    return;
+  }
+  const groups = [];
+  const index = new Map();
+  rows.forEach((t,i)=>{
+    const key = waveOf(t);
+    if(!index.has(key)){ index.set(key, groups.length); groups.push({key, items:[]}); }
+    groups[index.get(key)].items.push([t,i]);
+  });
+  ganttEl.innerHTML = groups.map(g=>{
+    const passed = g.items.filter(x=>x[0].status === 'passed').length;
+    const pct = Math.round(passed / g.items.length * 100);
+    return '<section class="lane"><h3><b>' + esc(g.key) + '</b>'
+      + '<span class="lane-meter" title="' + passed + '/' + g.items.length + ' 已通过"><i style="width:' + pct + '%"></i></span>'
+      + '<span class="lane-stat">' + passed + '/' + g.items.length + ' 已通过</span></h3>'
+      + g.items.map(([t,i])=>{
+        const w = fillOf[t.status] ?? 20;
+        return '<div class="g-row" data-i="' + i + '" aria-selected="' + (i === selected) + '">'
+          + '<span class="id" title="' + esc(t.desc || t.id) + '">' + esc(t.id) + '</span>'
+          + '<span class="track" title="' + esc(labels[t.status]) + '"><i style="width:' + w + '%;background:' + colors[t.status] + '"></i></span>'
+          + '<span class="g-state"><i class="dot" style="background:' + colors[t.status] + '"></i>' + labels[t.status] + '</span>'
+          + '</div>';
+      }).join('')
+      + '</section>';
+  }).join('');
 }
 function render(){
   const all = model.tasks.tasks;
@@ -495,31 +765,11 @@ function render(){
     : sortBy === 'status' ? states.indexOf(a.status) - states.indexOf(b.status)
     : Number(a.priority ?? 999999) - Number(b.priority ?? 999999));
   if(selected >= rows.length) selected = Math.max(0, rows.length - 1);
-  setText('count', rows.length + ' 条' + (filter === 'all' ? '' : ' · 已筛选') + ' · 第 ' + (rows.length ? selected + 1 : 0) + ' 行');
+  setText('count', rows.length + ' 条' + (filter === 'all' ? '' : ' · 已筛选') + ' · 第 ' + (rows.length ? selected + 1 : 0) + ' 张');
+  setTab(mainTab);
 
-  const tasksEl = $('tasks');
-  if(tasksEl){
-    tasksEl.innerHTML = rows.map((t,i)=>{
-      const tDeps = t.depends_on || [];
-      const depText = tDeps.map(d=>d + '/' + (byId.has(d) ? labels[byId.get(d).status] : '缺失')).join('、') || '无';
-      const g = gate(t);
-      const cell = g
-        ? (g.startsWith('门禁')
-            ? '<span class="flag warn" title="' + esc(g) + '">门禁缺口</span>'
-            : '<span class="flag" title="' + esc(g) + '">已关联</span>')
-        : '—';
-      const title = t.desc || t.description || '';
-      return '<tr data-i="' + i + '" aria-selected="' + (i === selected) + '">'
-        + '<td class="cell-id"><span class="id">' + esc(t.id) + '</span>' + depMarkup(byId, tDeps) + '</td>'
-        + '<td class="state"><i class="dot" style="background:' + colors[t.status] + ';margin-right:7px" aria-hidden="true"></i>' + labels[t.status] + '</td>'
-        + '<td class="num">' + esc(t.priority ?? '—') + '</td>'
-        + '<td class="desc" title="' + esc(title) + '">' + esc(title || '未填写') + '</td>'
-        + '<td class="deps" title="' + esc(depText) + '">' + esc(depText) + '</td>'
-        + '<td class="cmd mono" title="' + esc(t.verify || '') + '">' + esc(t.verify || '未填写') + '</td>'
-        + '<td class="gate">' + cell + '</td>'
-        + '</tr>';
-    }).join('') || '<tr><td colspan="7" class="empty">暂无匹配任务。按 L 载入当前项目，按 R 刷新。</td></tr>';
-  }
+  renderCards(rows, byId);
+  renderGantt(rows);
 
   const current = rows[selected];
   const detailEl = $('detail');
@@ -538,7 +788,7 @@ function render(){
     }
   }
 
-  const verdict = {pass:'通过',fail:'未通过'};
+  const verdict = {pass:'通过',fail:'评审未通过'};
   const events = [...model.evidence.map(x=>({...x,kind:'e'})), ...model.reviews.map(x=>({...x,kind:'r'}))]
     .sort((a,b)=>String(b.ts || '').localeCompare(String(a.ts || ''))).slice(0,5);
   const eventsEl = $('events');
@@ -583,6 +833,7 @@ function showEmpty(message){
   model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:''};
   selected = 0;
   render();
+  renderMap();
   status(message);
 }
 function guarded(fn){
@@ -658,13 +909,28 @@ $('filter-chip').addEventListener('click', e=>{
   filter = b.dataset.filter;
   render();
 });
-document.querySelector('.table-wrap').addEventListener('click', e=>{
-  const tr = e.target.closest ? e.target.closest('tr[data-i]') : null;
-  if(!tr) return;
-  selected = Number(tr.dataset.i);
+function pickRow(e){
+  const item = e.target && e.target.closest ? e.target.closest('[data-i]') : null;
+  if(!item) return;
+  selected = Number(item.dataset.i);
   render();
+}
+$('view-tabs').addEventListener('click', e=>{
+  const b = e.target.closest ? e.target.closest('[data-tab]') : null;
+  if(!b) return;
+  setTab(b.dataset.tab);
+});
+$('tasks').addEventListener('click', pickRow);
+$('gantt').addEventListener('click', pickRow);
+const evOpen = $('events-open'), evClose = $('events-close'), evDrawer = $('events-drawer');
+if(evOpen) evOpen.addEventListener('click', openEvents);
+if(evClose) evClose.addEventListener('click', closeEvents);
+if(evDrawer) evDrawer.addEventListener('click', e=>{
+  const t = e.target;
+  if(t && t.getAttribute && t.getAttribute('data-close-drawer')) closeEvents();
 });
 document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape'){ closeEvents(); }
   if(e.target && e.target.matches && e.target.matches('input,select,textarea')) return;
   if(e.ctrlKey || e.metaKey || e.altKey) return;
   if(e.key === 'l' || e.key === 'L'){ e.preventDefault(); loadProject(); }
@@ -673,8 +939,6 @@ document.addEventListener('keydown', e=>{
   if(e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp'){ e.preventDefault(); selected = Math.max(0, selected - 1); render(); }
   if(e.key === '/'){ e.preventDefault(); $('search').focus(); }
 });
-const legendEl = $('legend-list');
-if(legendEl) legendEl.innerHTML = states.map(s=>'<li><i class="dot" style="background:' + colors[s] + '" aria-hidden="true"></i>' + esc(labels[s]) + '</li>').join('');
 render();
 if(isLocalFile()) status(localFileHint(), true);
 else loadProject();

@@ -25,6 +25,8 @@ FILES = {
     "/evidence.jsonl": ("application/octet-stream", "evidence.jsonl"),
     "/reviews.jsonl": ("application/octet-stream", "reviews.jsonl"),
     "/progress.txt": ("text/plain; charset=utf-8", "progress.txt"),
+    # 可选：项目地图（人看的"我在哪"）。缺失时看板自动隐藏该区块。
+    "/board.json": ("application/json; charset=utf-8", "board.json"),
 }
 PORT_MIN, PORT_MAX = 8765, 8799
 WAIT_SECONDS = 3
