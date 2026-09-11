@@ -271,9 +271,10 @@ function renderAll(){
       detailEl.innerHTML = '<p class="id">' + esc(current.id) + '</p>'
         + '<p>' + labels[current.status] + ' · 优先级 ' + esc(current.priority ?? '—') + '</p>'
         + '<p>' + esc(current.desc || current.description || '未填写') + '</p>'
-        + (tDeps.length ? '<p class="muted">还依赖 ' + esc(tDeps.join('、')) + '</p>' : '')
-        + (current.reason ? '<p class="warn">' + esc(typeof current.reason === 'string' ? current.reason : JSON.stringify(current.reason)) + '</p>' : '')
-        + (g ? '<p class="' + (g.startsWith('门禁') ? 'warn' : 'muted') + '">' + esc(g) + '</p>' : '');
+        + '<p class="muted">依赖 ' + (tDeps.length ? esc(tDeps.join('、')) : '无') + '</p>'
+        + (current.reason ? '<p class="warn">阻塞原因：' + esc(typeof current.reason === 'string' ? current.reason : JSON.stringify(current.reason)) + '</p>' : '')
+        + '<p><code>' + esc(current.verify || '未填写验证') + '</code></p>'
+        + '<p class="' + (g.startsWith('门禁') ? 'warn' : 'muted') + '">' + esc(g || '无门禁缺口') + '</p>';
     }
   }
 
@@ -284,152 +285,52 @@ function isMetaRow(x){ return !x || x._comment || x.comment; }
 function asText(value){
   if(value == null || value === '') return '';
   if(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if(Array.isArray(value)) return value.map(asText).filter(Boolean).join('、');
-  return '';
+  try{ return JSON.stringify(value, null, 0); }catch(e){ return String(value); }
 }
-function zhTime(ts){
-  if(!ts) return '';
-  const d = new Date(ts);
-  if(Number.isNaN(d.getTime())) return String(ts);
-  return d.toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+function kv(label, value){
+  const text = asText(value);
+  if(!text) return '';
+  return '<div class="kv"><span>' + esc(label) + '</span><code>' + esc(text) + '</code></div>';
 }
-function looksChinese(text){ return /[\u4e00-\u9fff]/.test(String(text || '')); }
-function isHashKey(key){ return /sha|hash|digest|checksum/i.test(String(key || '')); }
-function basenamePath(p){
-  const s = String(p || '').replace(/\\/g,'/');
-  const i = s.lastIndexOf('/');
-  return i >= 0 ? s.slice(i + 1) : s;
+function encodingOf(x){
+  const env = (x && typeof x.environment === 'object' && x.environment) ? x.environment : {};
+  return x.encoding || x.PYTHONIOENCODING || env.encoding || env.PYTHONIOENCODING || env.PYTHONUTF8 || env.locale || '';
 }
-function exitMeaning(exit){
-  if(exit === 0 || exit === '0') return {cls:'ok', lead:'验证通过'};
-  if(exit == null || exit === '') return {cls:'miss', lead:'证据不完整'};
-  return {cls:'bad', lead:'验证失败'};
-}
-function reviewContextZh(x){
-  if(x.independent_readonly === true || String(x.reviewer_role || '').toLowerCase().includes('independent')) return '独立评审';
-  const ctx = String(x.reviewer_context || '').trim();
-  if(!ctx) return '没写评审从哪来';
-  if(/^[0-9a-f-]{16,}$/i.test(ctx)) return '另一次 Codex 任务';
-  const map = {
-    'codex-independent-task':'独立评审',
-    'codex-independent':'独立评审',
-    'independent':'独立评审',
-    'independent-review':'独立评审',
-    'same-session':'同一会话里评的（独立性不够）',
-    'same-task':'自己评自己（不算独立）',
-    'self':'自己评自己（不算独立）'
-  };
-  return map[ctx.toLowerCase()] || (looksChinese(ctx) ? ctx : '独立评审');
-}
-function prettyTestToken(token){
-  const t = String(token || '').trim();
-  if(!t) return '';
-  const mCount = t.match(/^(\d+)\s+(passed|failed)\b/i);
-  if(mCount) return mCount[1] + ( /fail/i.test(mCount[2]) ? ' 项失败' : ' 项通过');
-  const fail = /_FAIL\b|\bFAIL\b/.test(t);
-  const pass = /_PASS\b|\bPASS\b/.test(t);
-  let name = t.replace(/\([^)]*\)/g,'').replace(/_?(PASS|FAIL)\b/ig,'').trim();
-  name = name.replace(/^[A-Z][A-Z0-9]*-/, '').replace(/[-_]+/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
-  const map = {
-    'SCAN':'扫描', 'STATE':'状态', 'PACKET CONTRACT':'包契约', 'MODULE CLOSURE':'模块闭环',
-    'MANIFEST AUDIT':'清单', 'MARKDOWN TEXT':'文档', 'PY COMPILE':'语法', 'GIT DIFF --CHECK':'空白检查',
-    'GIT DIFF CHECK':'空白检查'
-  };
-  if(map[name]) return map[name] + (fail ? '没过' : '过了');
-  if(pass) return '一项检查过了';
-  if(fail) return '一项检查没过';
-  return '';
-}
-function prettyTests(raw){
-  const text = String(raw || '').trim();
-  if(!text) return [];
-  if(text.length < 36 && !/_PASS|_FAIL|;/.test(text)){
-    const one = prettyTestToken(text);
-    return one ? [one] : (looksChinese(text) ? [text] : []);
-  }
-  return text.split(/[;\n]+/).map(prettyTestToken).filter(Boolean).slice(0, 8);
-}
-function artifactHint(arts){
-  if(!arts) return '';
-  if(Array.isArray(arts)) return arts.length ? ('留下 ' + arts.length + ' 份产物') : '';
-  if(typeof arts === 'string') return '留下了产物';
-  if(typeof arts === 'object'){
-    const n = Object.keys(arts).filter(k => !isHashKey(k) && arts[k] != null && arts[k] !== '').length;
-    return n ? ('留下 ' + n + ' 份产物') : '';
-  }
-  return '';
-}
-function limitationHint(lim){
-  if(!lim) return '';
-  const arr = Array.isArray(lim) ? lim : [lim];
-  if(!arr.length) return '';
-  if(arr.some(s => /static-only/i.test(String(s)))) return '只做了静态检查，运行时还没验';
-  return '还标了 ' + arr.length + ' 条限制';
-}
-function decisionHint(text){
-  const s = String(text || '').trim();
-  if(!s) return '';
-  if(looksChinese(s)) return s.endsWith('。') ? s : (s + '。');
-  if(/evidence-ready/i.test(s) && /review/i.test(s)) return '证据已经齐了，等独立评审。';
-  if(/evidence-ready/i.test(s)) return '证据已经齐了。';
-  return '';
-}
-function rawBlock(x){
-  const lines = [];
-  if(x.cmd) lines.push('命令：' + x.cmd);
-  if(x.tests || x.summary) lines.push('结果：' + (x.tests || x.summary));
-  if(x.rev) lines.push('版本：' + x.rev);
-  if(x.artifacts && typeof x.artifacts === 'object' && !Array.isArray(x.artifacts)){
-    Object.keys(x.artifacts).filter(k => !isHashKey(k)).forEach(k => {
-      const v = x.artifacts[k];
-      if(v == null || v === '') return;
-      lines.push(k + '：' + (typeof v === 'string' ? v : JSON.stringify(v)));
-    });
-  }else if(x.artifacts){ lines.push('产物：' + asText(x.artifacts)); }
-  if(!lines.length) return '';
-  return '<details class="event-raw"><summary>原始记录</summary><pre>' + esc(lines.join('\n')) + '</pre></details>';
+function extrasOf(x, known){
+  if(!x || typeof x !== 'object') return '';
+  return Object.keys(x).filter(k => !known.has(k) && !String(k).startsWith('_') && x[k] != null && x[k] !== '')
+    .map(k => kv(k, x[k])).join('');
 }
 function renderEvidenceCard(x){
-  const ex = exitMeaning(x.exit);
-  const chips = prettyTests(x.tests || x.summary);
-  const body = decisionHint(x.decision) || [
-    artifactHint(x.artifacts) ? (artifactHint(x.artifacts) + '。') : '',
-    limitationHint(x.limitations) ? (limitationHint(x.limitations) + '。') : ''
-  ].filter(Boolean).join('') || (ex.cls === 'ok' ? '该做的检查已经跑通。' : (ex.cls === 'bad' ? '验证没有通过。' : '证据写得不够，看不出验了什么。'));
+  const ok = x.exit === 0 || x.exit === '0';
+  const cls = ok ? 'ok' : (x.exit == null || x.exit === '' ? 'miss' : 'bad');
+  const known = new Set(['id','task','cmd','exit','tests','summary','rev','ts','encoding','PYTHONIOENCODING','artifacts','environment','kind']);
   return '<article class="event is-e">'
-    + '<p class="event-lead"><span class="badge ' + ex.cls + '">' + ex.lead + '</span>'
-    + '<span>任务 <span class="id">' + esc(x.task || '—') + '</span></span></p>'
-    + (chips.length ? '<p class="event-chips">' + chips.map(c => '<span>' + esc(c) + '</span>').join('') + '</p>' : '')
-    + '<p class="event-body">' + esc(body) + '</p>'
-    + '<p class="event-meta">' + esc([zhTime(x.ts), x.id ? ('记录 ' + x.id) : ''].filter(Boolean).join(' · ')) + '</p>'
-    + rawBlock(x)
+    + '<header><b>证据</b><span class="id">' + esc(x.id || '—') + '</span><span class="id">' + esc(x.task || '—') + '</span>'
+    + '<span class="badge ' + cls + '">退出码 ' + esc(x.exit ?? '未知') + '</span></header>'
+    + kv('命令', x.cmd)
+    + kv('测试摘要', x.tests || x.summary)
+    + kv('revision', x.rev)
+    + kv('编码', encodingOf(x))
+    + kv('产物', x.artifacts)
+    + kv('环境', x.environment)
+    + kv('时间', x.ts)
+    + extrasOf(x, known)
     + '</article>';
 }
 function renderReviewCard(x){
-  const pass = x.verdict === 'pass';
-  const fail = x.verdict === 'fail';
-  const cls = pass ? 'ok' : (fail ? 'bad' : 'miss');
-  const lead = pass ? '独立评审通过' : (fail ? '独立评审未通过' : '评审结论没写清');
-  let reason = String(x.reason || x.note || '').trim();
-  if(!reason) reason = '没写理由。';
-  else if(!reason.endsWith('。')) reason += '。';
+  const cls = x.verdict === 'pass' ? 'ok' : (x.verdict === 'fail' ? 'bad' : 'miss');
+  const verdict = {pass:'通过', fail:'未通过'};
+  const known = new Set(['id','task','ev','reviewer_context','verdict','reason','note','ts','kind']);
   return '<article class="event is-r">'
-    + '<p class="event-lead"><span class="badge ' + cls + '">' + lead + '</span>'
-    + '<span>任务 <span class="id">' + esc(x.task || '—') + '</span></span></p>'
-    + '<p class="event-body">' + esc(reason) + '</p>'
-    + '<p class="event-meta">' + esc([reviewContextZh(x), x.ev ? ('对照 ' + x.ev) : '没挂证据', zhTime(x.ts)].filter(Boolean).join(' · ')) + '</p>'
+    + '<header><b>评审</b><span class="id">' + esc(x.id || '—') + '</span><span class="id">' + esc(x.task || '—') + '</span>'
+    + '<span class="badge ' + cls + '">' + esc(verdict[x.verdict] || x.verdict || '未知') + '</span></header>'
+    + kv('理由', x.reason || x.note)
+    + kv('评审上下文', x.reviewer_context)
+    + kv('对应证据', x.ev)
+    + kv('时间', x.ts)
+    + extrasOf(x, known)
     + '</article>';
-}
-function groupEvents(items){
-  const map = new Map();
-  for(const x of items){
-    const key = x.task || '(未写任务)';
-    if(!map.has(key)) map.set(key, {task:key, evidence:[], reviews:[], ts:''});
-    const g = map.get(key);
-    if(x.kind === 'e') g.evidence.push(x); else g.reviews.push(x);
-    if(String(x.ts || '') > String(g.ts || '')) g.ts = x.ts || '';
-  }
-  return Array.from(map.values()).sort((a,b)=>String(b.ts || '').localeCompare(String(a.ts || '')));
 }
 function renderEvents(current){
   const eventsEl = $('events');
@@ -445,28 +346,25 @@ function renderEvents(current){
     if(eventFilter === 'current') return currentId && x.task === currentId;
     return true;
   });
-  const groups = groupEvents(filtered).slice(0, 40);
-  setText('events-count', groups.length + ' 个任务' + (filtered.length ? ' · 原始 ' + filtered.length + ' 条' : ''));
+  const shown = filtered.slice(0, 80);
+  setText('events-count', (shown.length === filtered.length ? (filtered.length + ' 条') : (shown.length + '/' + filtered.length + ' 条'))
+    + (currentId ? ' · 当前 ' + currentId : ''));
   const filterBtns = (document.querySelectorAll && document.querySelectorAll('#event-filters [data-evf]')) || [];
   filterBtns.forEach(btn => {
     const key = (btn.dataset && btn.dataset.evf) || (btn.getAttribute && btn.getAttribute('data-evf'));
     if(btn.setAttribute) btn.setAttribute('aria-current', eventFilter === key ? 'true' : 'false');
   });
-  eventsEl.innerHTML = groups.map(g => {
-    const ev = g.evidence[0];
-    const rv = g.reviews[0];
-    const more = [
-      g.evidence.length > 1 ? ('另有 ' + (g.evidence.length - 1) + ' 次验证') : '',
-      g.reviews.length > 1 ? ('另有 ' + (g.reviews.length - 1) + ' 次评审') : ''
-    ].filter(Boolean).join(' · ');
-    return '<section class="event-group">'
-      + (ev ? renderEvidenceCard(ev) : '')
-      + (rv ? renderReviewCard(rv) : '')
-      + (more ? '<p class="event-more">' + esc(more) + '</p>' : '')
-      + '</section>';
-  }).join('') || '<p class="empty-note">还没有可以读的证据或评审</p>';
+  eventsEl.innerHTML = shown.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
+    || '<p class="empty-note">暂无证据或评审</p>';
+  const detailEv = $('detail-events');
+  if(detailEv){
+    if(!currentId){ detailEv.innerHTML = ''; return; }
+    const mine = items.filter(x => x.task === currentId).slice(0, 4);
+    detailEv.innerHTML = mine.length
+      ? '<h3>证据 / 评审</h3>' + mine.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
+      : '<h3>证据 / 评审</h3><p class="muted">该任务还没有证据或评审</p>';
+  }
 }
-
 async function fetchOne(name){
   const errs = []; let notFound = false;
   for(const base of ['./','../']){
