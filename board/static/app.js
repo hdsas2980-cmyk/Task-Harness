@@ -340,17 +340,28 @@ function guarded(fn){
   return run;
 }
 let selectedPath = '';
+let lastSource = '';
 let sessionCatalog = {projects:[], suggested:null, sessions_dir:''};
 let bootTried = false;
 function setDirLabel(path){
   const el = $('project');
-  if(el) el.textContent = path || '未选择目录';
+  if(el) el.textContent = path || (lastSource ? ('上次 ' + lastSource) : '未选择目录');
   const hint = $('source-hint');
-  if(hint) hint.textContent = path ? ('只读 · ' + path) : '只读，不写任务真相源';
+  if(hint) hint.textContent = path ? ('只读 · ' + path) : (lastSource ? ('上次路径 ' + lastSource) : '只读，不写任务真相源');
+  const lastEl = $('load-last');
+  if(lastEl) lastEl.textContent = lastSource ? ('上次路径 ' + lastSource) : '没有上次路径';
 }
 function rememberPath(path){
   selectedPath = path || '';
+  if(selectedPath) lastSource = selectedPath;
+  try{ if(lastSource) localStorage.setItem('task-harness-last-source', lastSource); }catch(e){}
   setDirLabel(selectedPath);
+}
+function noteLastSource(path){
+  if(!path) return;
+  lastSource = String(path);
+  try{ localStorage.setItem('task-harness-last-source', lastSource); }catch(e){}
+  if(!selectedPath) setDirLabel('');
 }
 function loadDrawer(){ return $('load-drawer'); }
 function openLoad(){
@@ -358,7 +369,7 @@ function openLoad(){
   if(!el) return;
   el.hidden = false;
   const input = $('load-path');
-  if(input && selectedPath && !input.value) input.value = selectedPath;
+  if(input && !input.value) input.value = selectedPath || lastSource || '';
   const q = $('load-q');
   if(q) setTimeout(()=>q.focus(), 0);
 }
@@ -477,6 +488,7 @@ async function pullLive(){
   if(isLocalFile()) throw Error(localFileHint());
   try{
     const data = await api('/api/snapshot');
+    if(data && data.last_source) noteLastSource(data.last_source);
     if(data && data.source) rememberPath(data.source);
     if(data && data.files && data.files['tasks.json']) return data.files;
     return null;
@@ -510,6 +522,7 @@ async function bootstrapSource(){
   bootTried = true;
   try{
     const snap = await api('/api/snapshot');
+    if(snap && snap.last_source) noteLastSource(snap.last_source);
     if(snap && snap.source) rememberPath(snap.source);
     if(snap && snap.files && snap.files['tasks.json']){
       lastStamp = stampOf(snap.files);
@@ -629,6 +642,7 @@ document.addEventListener('keydown', e=>{
   if(e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp'){ e.preventDefault(); selected = Math.max(0, selected - 1); render(); }
   if(e.key === '/'){ e.preventDefault(); $('search').focus(); }
 });
+try{ lastSource = localStorage.getItem('task-harness-last-source') || ''; }catch(e){}
 render();
 setDirLabel('');
 try{ document.documentElement.setAttribute('data-boot','ok'); }catch(e){}

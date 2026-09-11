@@ -34,6 +34,11 @@ def configure_stdio() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stdin, "reconfigure"):
+        try:
+            sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 
 def emit(msg: str) -> None:
@@ -46,18 +51,45 @@ def emit(msg: str) -> None:
     print(msg)
 
 
+def last_source_path() -> Path:
+    env = os.environ.get("TASK_HARNESS_LAST_SOURCE")
+    if env:
+        return Path(env)
+    return HERE / ".last-source"
+
+
+def load_last_source() -> str | None:
+    try:
+        text = last_source_path().read_text(encoding="utf-8-sig").strip()
+    except OSError:
+        return None
+    return text or None
+
+
+def save_last_source(source: Path) -> None:
+    try:
+        fp = last_source_path()
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text(str(source) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
 def snapshot(source: Path | None) -> dict:
-    if source is None:
-        return {"source": None, "files": {}}
     files = {}
-    tasks = source / "tasks.json"
-    if tasks.is_file():
-        files["tasks.json"] = tasks.read_text(encoding="utf-8-sig")
-    for name in OPTIONAL:
-        fp = source / name
-        if fp.is_file():
-            files[name] = fp.read_text(encoding="utf-8-sig")
-    return {"source": str(source), "files": files}
+    if source is not None:
+        tasks = source / "tasks.json"
+        if tasks.is_file():
+            files["tasks.json"] = tasks.read_text(encoding="utf-8-sig")
+        for name in OPTIONAL:
+            fp = source / name
+            if fp.is_file():
+                files[name] = fp.read_text(encoding="utf-8-sig")
+    return {
+        "source": str(source) if source is not None else None,
+        "files": files,
+        "last_source": load_last_source(),
+    }
 
 
 def bind_source(path_str: str) -> Path:
@@ -67,7 +99,59 @@ def bind_source(path_str: str) -> Path:
     source = resolve_source(Path(raw), must_exist=True)
     with SOURCE_LOCK:
         Handler.source = source
+    save_last_source(source)
     return source
+
+
+def stdin_is_tty() -> bool:
+    try:
+        return bool(sys.stdin) and sys.stdin.isatty()
+    except Exception:
+        return False
+
+
+def existing_project(raw: str) -> Path:
+    target = Path(raw).expanduser()
+    try:
+        target = target.resolve()
+    except OSError:
+        target = Path(os.path.normpath(str(target)))
+    if target.exists():
+        return target
+    if target.name == ".harness" and target.parent.exists():
+        return target.parent
+    raise ValueError("项目目录不存在: " + str(target))
+
+
+def choose_project(explicit: str | None, prompt: bool) -> Path | None:
+    if explicit:
+        return Path(explicit)
+    last = load_last_source()
+    if not prompt or not stdin_is_tty():
+        if last:
+            try:
+                return existing_project(last)
+            except ValueError:
+                emit("上次路径不可用，改为页面选择。")
+        return None
+    emit("上次路径 " + (last or "（无）"))
+    hint = "回车=上次" if last else "回车=会话选择"
+    while True:
+        try:
+            raw = input("项目目录（%s，s=会话选择）: " % hint)
+        except EOFError:
+            raw = ""
+        raw = str(raw or "").strip().strip('"').strip("'")
+        if raw.lower() in ("s", "session"):
+            return None
+        if not raw:
+            if not last:
+                return None
+            raw = last
+        try:
+            return existing_project(raw)
+        except ValueError as exc:
+            emit(str(exc))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -142,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "JSON 无效"}, 400)
             return
         data = snapshot(source)
-        emit("轮询 " + str(source))
+        emit("当前路径 " + str(source))
         self._send_json(data)
 
     def _post_pick_dir(self):
@@ -212,15 +296,20 @@ def pick_port(preferred: int) -> int:
 
 
 def serve(project: Path | None, port: int = 0, open_browser: bool = True) -> ThreadingHTTPServer:
-    source = resolve_source(project, must_exist=True) if project is not None else None
+    source = None
+    if project is not None:
+        source = resolve_source(existing_project(str(project)), must_exist=True)
+        save_last_source(source)
     chosen = pick_port(port)
     httpd = make_server(source, chosen)
     url = "http://127.0.0.1:%s/" % chosen
-    emit("看板 " + url)
+    emit("前端 " + url)
+    emit("后端 " + url + "api/")
+    emit("上次路径 " + (load_last_source() or "（无）"))
     if source is None:
-        emit("未绑定任务目录，请在页面指定 harness 或选择 Codex 会话。")
+        emit("当前路径 未绑定（页面里指定目录或选会话）")
     else:
-        emit("轮询 " + str(source))
+        emit("当前路径 " + str(source))
     emit("只读，不写 tasks.json。Ctrl+C 停止。")
     if open_browser:
         try:
@@ -233,12 +322,13 @@ def serve(project: Path | None, port: int = 0, open_browser: bool = True) -> Thr
 def main() -> None:
     configure_stdio()
     parser = argparse.ArgumentParser(description="只读轮询任务看板")
-    parser.add_argument("project", nargs="?", default=None, help="项目根或 .harness 目录；省略则在页面选择")
+    parser.add_argument("project", nargs="?", default=None, help="项目根或 .harness 目录；省略则交互选择")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--no-open", action="store_true")
+    parser.add_argument("--no-prompt", action="store_true", help="不询问目录，有上次路径就用")
     args = parser.parse_args()
-    project = Path(args.project) if args.project else None
     try:
+        project = choose_project(args.project, prompt=not args.no_prompt)
         httpd = serve(project, args.port, not args.no_open)
     except (OSError, ValueError) as exc:
         emit("看板启动失败: " + str(exc))

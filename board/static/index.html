@@ -461,6 +461,7 @@ nav button[aria-current=page]::before{background:var(--st, var(--ink))}
 .filter-chip[data-status="regressed"]{--st:var(--st-regressed)}
 .filter-chip{border-color:color-mix(in oklch,var(--st) 45%,var(--line));color:var(--st);background:color-mix(in oklch,var(--st) 12%,var(--surface))}
 nav button[aria-current=page] svg{color:var(--st, var(--ink))}
+.load-last{margin:8px 0 0;font:12px/1.4 var(--mono);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -597,6 +598,7 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
           <button class="btn" id="load-browse" type="button">浏览</button>
           <button class="btn btn-solid" id="load-path-go" type="button">载入</button>
         </div>
+        <p class="load-last" id="load-last">没有上次路径</p>
       </section>
       <section class="load-sec">
         <h3>2 从 Codex 会话选择</h3>

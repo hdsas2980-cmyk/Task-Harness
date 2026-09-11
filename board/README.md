@@ -6,7 +6,9 @@
 
 ## 启动（Windows，注意编码）
 
-脚本按 UTF-8 运行：chcp 65001 + PYTHONUTF8=1 + python -X utf8。start.ps1 只用 ASCII（带 UTF-8 BOM），避免 Windows PowerShell 5.1 按系统代码页把中文拆成语法错误。
+脚本按 UTF-8 运行：`chcp 65001` + `PYTHONUTF8=1` + `python -X utf8`。`start.ps1` 只用 ASCII（带 UTF-8 BOM），避免 Windows PowerShell 5.1 按系统代码页把中文拆成语法错误。
+
+双击 `board\start.bat` 会交互询问目录：回车用上次路径，输入 `s` 则打开页面从 Codex 会话选择。控制台会打印前端地址、后端地址、上次路径和当前路径。失败时窗口不会立刻关掉。
 
 ```bat
 board\start.bat
@@ -23,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File .\board\start.ps1 -ProjectDir "E:\path\
 浏览器打开输出的 `http://127.0.0.1:<port>/`。
 
 - 传了 `-ProjectDir`：直接轮询该项目的 `.harness`（或根目录 `tasks.json`）。
-- 没传：页面「载入任务」指定绝对路径，或从本机 Codex 会话选择工作目录。最近一条会话若已有 `tasks.json`，会自动载入。
+- 没传：控制台询问目录（回车=上次路径，`s`=页面选会话）。页面里仍可改目录或选会话。
 
 进程在前台轮询任务目录；改 `tasks.json` 后页面会自己刷新。Ctrl+C 停止。
 

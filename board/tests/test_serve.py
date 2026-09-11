@@ -66,7 +66,10 @@ class BoardServeTests(unittest.TestCase):
             encoding="utf-8",
         )
         self._old_sessions = os.environ.get("CODEX_SESSIONS_DIR")
+        self._old_last = os.environ.get("TASK_HARNESS_LAST_SOURCE")
         os.environ["CODEX_SESSIONS_DIR"] = str(sessions)
+        self.last_file = self.root / "last-source.txt"
+        os.environ["TASK_HARNESS_LAST_SOURCE"] = str(self.last_file)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("127.0.0.1", 0))
         self.port = sock.getsockname()[1]
@@ -91,6 +94,10 @@ class BoardServeTests(unittest.TestCase):
             os.environ.pop("CODEX_SESSIONS_DIR", None)
         else:
             os.environ["CODEX_SESSIONS_DIR"] = self._old_sessions
+        if self._old_last is None:
+            os.environ.pop("TASK_HARNESS_LAST_SOURCE", None)
+        else:
+            os.environ["TASK_HARNESS_LAST_SOURCE"] = self._old_last
 
     def test_snapshot_chinese_and_readonly(self):
         before = self.tasks.read_bytes()
@@ -168,6 +175,24 @@ class BoardServeTests(unittest.TestCase):
             httpd.shutdown()
             httpd.server_close()
 
+
+    def test_switch_remembers_last_source(self):
+        status, body = fetch(self.base + "/api/source", {"path": str(self.other)})
+        self.assertEqual(status, 200)
+        data = json.loads(body.decode("utf-8"))
+        self.assertTrue(self.last_file.is_file())
+        saved = self.last_file.read_text(encoding="utf-8").strip()
+        self.assertEqual(saved, data["source"])
+        self.assertEqual(data["last_source"], saved)
+        _, body = fetch(self.base + "/api/snapshot")
+        snap = json.loads(body.decode("utf-8"))
+        self.assertEqual(snap["last_source"], saved)
+
+    def test_choose_project_reuses_last_without_tty(self):
+        harness = self.root / ".harness"
+        self.last_file.write_text(str(harness) + "\n", encoding="utf-8")
+        chosen = mod.choose_project(None, prompt=False)
+        self.assertEqual(chosen, harness)
 
     def test_start_ps1_is_ascii(self):
         raw = (ROOT / "start.ps1").read_bytes()

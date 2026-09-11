@@ -4,7 +4,8 @@
 param(
   [Alias('HarnessDir')][string]$ProjectDir = '',
   [int]$Port = 0,
-  [switch]$NoOpen
+  [switch]$NoOpen,
+  [switch]$NoPrompt
 )
 $ErrorActionPreference = 'Stop'
 try { chcp 65001 | Out-Null } catch {}
@@ -30,6 +31,7 @@ $Arguments = @('-X', 'utf8', $Serve)
 if ($ProjectDir) { $Arguments += $ProjectDir }
 if ($Port -gt 0) { $Arguments += @('--port', "$Port") }
 if ($NoOpen) { $Arguments += '--no-open' }
+if ($NoPrompt) { $Arguments += '--no-prompt' }
 Write-Host 'Starting board...'
 & $Python @Arguments
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
