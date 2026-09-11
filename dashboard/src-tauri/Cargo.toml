@@ -5,6 +5,10 @@ description = "Standalone Task Harness operator board"
 authors = ["Task Harness contributors"]
 edition = "2021"
 
+[[bin]]
+name = "TaskHarness"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -18,3 +22,5 @@ tauri-plugin-dialog = "2"
 panic = "abort"
 lto = true
 codegen-units = 1
+opt-level = "z"
+strip = true
