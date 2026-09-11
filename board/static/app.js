@@ -271,10 +271,9 @@ function renderAll(){
       detailEl.innerHTML = '<p class="id">' + esc(current.id) + '</p>'
         + '<p>' + labels[current.status] + ' · 优先级 ' + esc(current.priority ?? '—') + '</p>'
         + '<p>' + esc(current.desc || current.description || '未填写') + '</p>'
-        + '<p class="muted">依赖 ' + (tDeps.length ? esc(tDeps.join('、')) : '无') + '</p>'
-        + (current.reason ? '<p class="warn">阻塞原因：' + esc(typeof current.reason === 'string' ? current.reason : JSON.stringify(current.reason)) + '</p>' : '')
-        + '<p><code>' + esc(current.verify || '未填写验证') + '</code></p>'
-        + '<p class="' + (g.startsWith('门禁') ? 'warn' : 'muted') + '">' + esc(g || '无门禁缺口') + '</p>';
+        + (tDeps.length ? '<p class="muted">还依赖 ' + esc(tDeps.join('、')) + '</p>' : '')
+        + (current.reason ? '<p class="warn">' + esc(typeof current.reason === 'string' ? current.reason : JSON.stringify(current.reason)) + '</p>' : '')
+        + (g ? '<p class="' + (g.startsWith('门禁') ? 'warn' : 'muted') + '">' + esc(g) + '</p>' : '');
     }
   }
 
@@ -285,51 +284,75 @@ function isMetaRow(x){ return !x || x._comment || x.comment; }
 function asText(value){
   if(value == null || value === '') return '';
   if(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-  try{ return JSON.stringify(value, null, 0); }catch(e){ return String(value); }
+  if(Array.isArray(value)) return value.map(asText).filter(Boolean).join('、');
+  if(typeof value === 'object'){
+    if(value.path || value.name) return asText(value.path || value.name);
+    try{ return Object.values(value).map(asText).filter(Boolean).join('、'); }catch(e){ return ''; }
+  }
+  return String(value);
 }
-function kv(label, value){
-  const text = asText(value);
-  if(!text) return '';
-  return '<div class="kv"><span>' + esc(label) + '</span><code>' + esc(text) + '</code></div>';
+function zhTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  if(Number.isNaN(d.getTime())) return String(ts);
+  return d.toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
 }
-function encodingOf(x){
-  const env = (x && typeof x.environment === 'object' && x.environment) ? x.environment : {};
-  return x.encoding || x.PYTHONIOENCODING || env.encoding || env.PYTHONIOENCODING || env.PYTHONUTF8 || env.locale || '';
+function joinZh(parts){
+  const bits = parts.filter(Boolean);
+  if(!bits.length) return '';
+  return bits.join('，') + '。';
 }
-function extrasOf(x, known){
-  if(!x || typeof x !== 'object') return '';
-  return Object.keys(x).filter(k => !known.has(k) && !String(k).startsWith('_') && x[k] != null && x[k] !== '')
-    .map(k => kv(k, x[k])).join('');
+function exitMeaning(exit){
+  if(exit === 0 || exit === '0') return {cls:'ok', lead:'验证通过', bit:'命令正常结束'};
+  if(exit == null || exit === '') return {cls:'miss', lead:'证据不完整', bit:'没写验证结果'};
+  return {cls:'bad', lead:'验证失败', bit:'退出码 ' + exit};
+}
+function reviewContextZh(ctx){
+  if(!ctx) return '没写评审是从哪来的';
+  const key = String(ctx).trim().toLowerCase();
+  const map = {
+    'codex-independent-task':'独立 Codex 任务',
+    'codex-independent':'独立 Codex 任务',
+    'independent':'独立上下文',
+    'independent-review':'独立评审上下文',
+    'same-session':'同一会话（独立性不够）',
+    'same-task':'同一任务里自检（不算独立）',
+    'self':'自己评自己（不算独立）'
+  };
+  return map[key] || ('来源：' + ctx);
 }
 function renderEvidenceCard(x){
-  const ok = x.exit === 0 || x.exit === '0';
-  const cls = ok ? 'ok' : (x.exit == null || x.exit === '' ? 'miss' : 'bad');
-  const known = new Set(['id','task','cmd','exit','tests','summary','rev','ts','encoding','PYTHONIOENCODING','artifacts','environment','kind']);
+  const ex = exitMeaning(x.exit);
+  const tests = asText(x.tests || x.summary);
+  const artifacts = asText(x.artifacts);
+  const body = joinZh([
+    x.cmd ? ('跑了 ' + x.cmd) : '',
+    tests ? ('结果是 ' + tests) : '',
+    (x.rev && String(x.rev).toUpperCase() !== 'N/A') ? ('代码版本 ' + x.rev) : '',
+    artifacts ? ('留下 ' + artifacts) : ''
+  ]) || '这条证据没写清到底验证了什么。';
   return '<article class="event is-e">'
-    + '<header><b>证据</b><span class="id">' + esc(x.id || '—') + '</span><span class="id">' + esc(x.task || '—') + '</span>'
-    + '<span class="badge ' + cls + '">退出码 ' + esc(x.exit ?? '未知') + '</span></header>'
-    + kv('命令', x.cmd)
-    + kv('测试摘要', x.tests || x.summary)
-    + kv('revision', x.rev)
-    + kv('编码', encodingOf(x))
-    + kv('产物', x.artifacts)
-    + kv('环境', x.environment)
-    + kv('时间', x.ts)
-    + extrasOf(x, known)
+    + '<p class="event-lead"><span class="badge ' + ex.cls + '">' + ex.lead + '</span>'
+    + '<span>任务 <span class="id">' + esc(x.task || '—') + '</span></span></p>'
+    + '<p class="event-body">' + esc(body) + '</p>'
+    + '<p class="event-meta">' + esc([ex.bit, x.id ? ('记录 ' + x.id) : '', zhTime(x.ts)].filter(Boolean).join(' · ')) + '</p>'
     + '</article>';
 }
 function renderReviewCard(x){
-  const cls = x.verdict === 'pass' ? 'ok' : (x.verdict === 'fail' ? 'bad' : 'miss');
-  const verdict = {pass:'通过', fail:'未通过'};
-  const known = new Set(['id','task','ev','reviewer_context','verdict','reason','note','ts','kind']);
+  const pass = x.verdict === 'pass';
+  const fail = x.verdict === 'fail';
+  const cls = pass ? 'ok' : (fail ? 'bad' : 'miss');
+  const lead = pass ? '独立评审通过' : (fail ? '独立评审未通过' : '评审结论没写清');
+  const reason = asText(x.reason || x.note) || '没写理由。';
+  const bits = [
+    reviewContextZh(x.reviewer_context),
+    x.ev ? ('对照证据 ' + x.ev) : '没挂上对应证据'
+  ];
   return '<article class="event is-r">'
-    + '<header><b>评审</b><span class="id">' + esc(x.id || '—') + '</span><span class="id">' + esc(x.task || '—') + '</span>'
-    + '<span class="badge ' + cls + '">' + esc(verdict[x.verdict] || x.verdict || '未知') + '</span></header>'
-    + kv('理由', x.reason || x.note)
-    + kv('评审上下文', x.reviewer_context)
-    + kv('对应证据', x.ev)
-    + kv('时间', x.ts)
-    + extrasOf(x, known)
+    + '<p class="event-lead"><span class="badge ' + cls + '">' + lead + '</span>'
+    + '<span>任务 <span class="id">' + esc(x.task || '—') + '</span></span></p>'
+    + '<p class="event-body">' + esc(reason.endsWith('。') ? reason : (reason + '。')) + '</p>'
+    + '<p class="event-meta">' + esc([bits.join('，'), x.id ? ('记录 ' + x.id) : '', zhTime(x.ts)].filter(Boolean).join(' · ')) + '</p>'
     + '</article>';
 }
 function renderEvents(current){
@@ -347,24 +370,18 @@ function renderEvents(current){
     return true;
   });
   const shown = filtered.slice(0, 80);
-  setText('events-count', (shown.length === filtered.length ? (filtered.length + ' 条') : (shown.length + '/' + filtered.length + ' 条'))
-    + (currentId ? ' · 当前 ' + currentId : ''));
+  setText('events-count', shown.length === filtered.length
+    ? (filtered.length + ' 条记录')
+    : ('最近 ' + shown.length + ' / ' + filtered.length + ' 条'));
   const filterBtns = (document.querySelectorAll && document.querySelectorAll('#event-filters [data-evf]')) || [];
   filterBtns.forEach(btn => {
     const key = (btn.dataset && btn.dataset.evf) || (btn.getAttribute && btn.getAttribute('data-evf'));
     if(btn.setAttribute) btn.setAttribute('aria-current', eventFilter === key ? 'true' : 'false');
   });
   eventsEl.innerHTML = shown.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
-    || '<p class="empty-note">暂无证据或评审</p>';
-  const detailEv = $('detail-events');
-  if(detailEv){
-    if(!currentId){ detailEv.innerHTML = ''; return; }
-    const mine = items.filter(x => x.task === currentId).slice(0, 4);
-    detailEv.innerHTML = mine.length
-      ? '<h3>证据 / 评审</h3>' + mine.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
-      : '<h3>证据 / 评审</h3><p class="muted">该任务还没有证据或评审</p>';
-  }
+    || '<p class="empty-note">还没有证据或评审记录</p>';
 }
+
 async function fetchOne(name){
   const errs = []; let notFound = false;
   for(const base of ['./','../']){

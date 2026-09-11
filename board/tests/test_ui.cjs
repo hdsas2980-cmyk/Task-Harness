@@ -120,10 +120,10 @@ function run(extras){
   assert.match(http.node('events').innerHTML, /go test/);
   assert.match(http.node('events').innerHTML, /12 passed/);
   assert.match(http.node('events').innerHTML, /abc123/);
-  assert.match(http.node('events').innerHTML, /utf-8/);
+  assert.match(http.node('events').innerHTML, /验证通过/);
   assert.match(http.node('events').innerHTML, /范围与验证通过/);
-  assert.match(http.node('events').innerHTML, /codex-independent-task/);
-  assert.match(http.node('detail-events').innerHTML, /退出码/);
+  assert.match(http.node('events').innerHTML, /独立 Codex 任务/);
+  assert.doesNotMatch(http.node('detail').innerHTML, /跑了 /);
 
   console.log('UI logic: assertions passed (mock DOM; not browser visual verification)');
 })().catch(e=>{console.error(e);process.exitCode=1;});
