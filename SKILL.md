@@ -1,9 +1,11 @@
 ---
 name: task-harness
-description: 长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，主会话上下文不随任务数增长。这是宿主无关的核心协议；安装到具体 ADE 请用对应分支。
+description: DeepSeek Harness 专用长时任务骨架。一轮一任务、状态落盘、证据加独立评审判定完成。
+whenToUse: 需要跨多次 DSH 会话推进大型工程、一轮只做一个可验证任务、并且完成必须有证据加独立评审时使用。
+user-invocable: true
 ---
 
-# task-harness v3.1 — Core
+# task-harness v3.1 — DeepSeek Harness
 
 ## 定位
 
@@ -15,7 +17,17 @@ description: 长时运行任务的最小骨架。一轮一任务、状态落盘�
 
 状态全部落盘。主会话只读取当前任务和它触及的文件，不随任务数量回读历史。宁可骨架简陋，不可问责缺失：不因「精简」砍掉验证、安全、错误处理和可回滚性。
 
-要装进 Claude Code / Codex / TRAE / WorkBuddy / DSH，请检出对应宿主分支。分支表见仓库根 `BRANCHES.md`。
+本版本是 **DeepSeek Harness（DSH）适配**。口头常说的 dhs 也指本分支。
+
+安装只写 `$DSH_HOME/skills/task-harness`（默认 `~/.dsh/skills/task-harness`）。项目级可另放 `<repo>/.dsh/skills/task-harness`。不写入 Claude / Codex / TRAE / WorkBuddy，也不默认写入 `~/.agents/skills`。
+
+## DSH 运行契约
+
+1. 当前 DSH 会话 = 一轮：只推进一个任务。
+2. 状态外置到项目 `.harness/`。
+3. 独立评审用新会话或只读 subagent；不能把实现者自检写成 `pass`。
+4. DSH 的 `tool-ralph` 只是连推循环，不能代替 `evidence.jsonl` + 独立 `reviews.jsonl`。
+5. 技能必须是单层目录包 `task-harness/SKILL.md`，name 为 kebab-case。
 
 ## 核心不变式
 
