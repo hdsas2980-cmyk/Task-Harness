@@ -1,6 +1,6 @@
 ---
 name: task-harness
-description: Codex 专用长时任务骨架：一轮一任务、状态落盘、证据与独立评审共同判定完成，严格控制上下文增长。适用于需要跨多个 Codex 任务/会话推进的大型工程。
+description: Codex 专用长时任务骨架：一轮一任务、状态落盘、证据与独立评审共同判定完成，严格控制上下文增长。适用于跨多个 Codex 任务/会话推进的大型工程，以及多会话编成、会话命名、多子代理并行、独立审计、派卡或会话作废归档。
 ---
 
 # task-harness v3.1 — Codex Native
@@ -34,6 +34,19 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 4. 评审必须在独立上下文完成，并记录评审上下文/来源。
 5. 任何阻塞必须写入结构化 reason；不得用“看起来没问题”替代验证。
 6. 已通过任务受依赖、接口或环境变化影响时，标记 `regressed` 并回到 `active`。
+
+
+## 多会话并行（Codex 专属）
+
+并行不等于一轮多任务。并行 = 多个 Codex 任务/会话（或 sidecar 子代理），每个仍只持一张卡。
+
+1. 先定编成：1 个审计会话 + N 个实现会话；审计不写业务、不自签 `passed`。
+2. 创建或换卡后立刻按 `references/codex-parallel.md` 命名；作废先改 `归档_` 再停派。
+3. 派卡用独立会话；共享 checkout 时写范围互斥，提交三查。
+4. 子代理只做无共享状态的 sidecar；要进侧边栏给用户跟的用会话，不用子代理。
+5. 实现者停在 `evidence_ready` 并抄送审计；审计 `pass` 必须回写 `tasks.json`，看板才会变。
+
+细则、标题正则、失败重建：`references/codex-parallel.md`。
 
 ## 状态机
 
@@ -75,7 +88,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
    HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
    ```
 
-4. 将评审结果追加到 `reviews.jsonl`，`pass` 才能把 `evidence_ready` 改为 `passed`；`fail` 回到 `active` 并带新证据重试。
+4. 将评审结果追加到 `reviews.jsonl`，`pass` 才能把 `evidence_ready` 改为 `passed`；`fail` 回到 `active` 并带新证据重试。看板只读 `tasks.json`，`pass` 必须当场回写，不能只在对话里宣布。
 
 ## ponytail 阶梯
 

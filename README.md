@@ -16,6 +16,7 @@
 
 ## Codex 专用改动
 
+- 多会话编成、会话命名与多子代理并行见 `references/codex-parallel.md`；并行 = 多会话各持一卡，不是一轮多任务。
 - 明确把“当前 Codex 任务”定义为一轮，不依赖 Claude Code 会话语义；
 - 优先 PowerShell，同时保留 Git Bash/Linux/macOS 的 `init.sh`；
 - 评审协议改为独立 Codex 上下文，review 记录增加 `reviewer_context`；
