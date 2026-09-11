@@ -4,16 +4,20 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const htmlPath = path.join(__dirname,'../dashboard/ui/index.html');
 const templatePath = path.join(__dirname,'../references/templates/task-harness.html');
+const jsPath = path.join(__dirname,'../dashboard/ui/app.js');
+const jsTemplatePath = path.join(__dirname,'../references/templates/app.js');
 const html = fs.readFileSync(htmlPath,'utf8');
+const code = fs.readFileSync(jsPath,'utf8');
 assert.equal(fs.readFileSync(templatePath,'utf8'), html);
+assert.equal(fs.readFileSync(jsTemplatePath,'utf8'), code);
 assert.match(html, /载入任务/);
 assert.match(html, /刷新任务/);
-assert.match(html, /选择项目任务目录/);
-assert.match(html, /showDirectoryPicker/);
-assert.match(html, /probe_harness_dir/);
-assert.match(html, /正在选择项目任务目录/);
+assert.match(html, /\.\/app\.js/);
+assert.match(code, /选择项目任务目录/);
+assert.match(code, /showDirectoryPicker/);
+assert.match(code, /probe_harness_dir/);
+assert.match(code, /正在选择项目任务目录/);
 assert.doesNotMatch(html, /载入示例|清空|type="file"|__HARNESS_SNAPSHOT__|id="snapshot"/);
-const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 function node(id, nodes){
   if(!nodes.has(id)) nodes.set(id,{textContent:'',innerHTML:'',value:'',checked:false,disabled:false,classList:{toggle(){},add(){},remove(){}},addEventListener(){},insertAdjacentHTML(_,text){this.innerHTML+=text;},click(){this.clicked=true;},matches(){return false;},closest(){return null;}});

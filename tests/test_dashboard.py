@@ -214,14 +214,19 @@ class DashboardTests(unittest.TestCase):
         self.assertFalse((ROOT / "references/templates/render_dashboard.py").exists())
         self.assertFalse((ROOT / "references/visualizer/task-harness.html").exists())
         text = (ROOT / "references/templates/task-harness.html").read_text(encoding="utf-8")
+        js = (ROOT / "references/templates/app.js").read_text(encoding="utf-8")
         self.assertNotIn("载入示例", text)
         self.assertNotIn("清空", text)
         self.assertNotIn("type=\"file\"", text)
         self.assertIn("刷新任务", text)
-        self.assertIn("评审未通过", text)
-        self.assertIn("选择项目任务目录", text)
+        self.assertIn("评审未通过", js)
+        self.assertIn("选择项目任务目录", js)
         self.assertTrue((ROOT / "dashboard/ui/index.html").exists())
         self.assertEqual(text, (ROOT / "dashboard/ui/index.html").read_text(encoding="utf-8"))
+        self.assertIn("./app.js", text)
+        js = (ROOT / "references/templates/app.js").read_text(encoding="utf-8")
+        self.assertEqual(js, (ROOT / "dashboard/ui/app.js").read_text(encoding="utf-8"))
+        self.assertIn("probe_harness_dir", js)
 
 
 if __name__ == "__main__":

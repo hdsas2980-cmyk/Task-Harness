@@ -21,6 +21,7 @@ from urllib.parse import unquote, urlparse
 STATES = ("pending", "active", "evidence_ready", "passed", "blocked", "regressed")
 FILES = {
     "/task-harness.html": ("text/html; charset=utf-8", "task-harness.html"),
+    "/app.js": ("text/javascript; charset=utf-8", "app.js"),
     "/tasks.json": ("application/json; charset=utf-8", "tasks.json"),
     "/evidence.jsonl": ("application/octet-stream", "evidence.jsonl"),
     "/reviews.jsonl": ("application/octet-stream", "reviews.jsonl"),
@@ -73,6 +74,18 @@ def copy_spa(output):
     finally:
         if tmp_name and Path(tmp_name).exists():
             Path(tmp_name).unlink()
+    js_src = src.with_name("app.js")
+    if js_src.is_file():
+        js_dest = output / "app.js"
+        js_tmp = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=output, prefix=".dash-") as tmp:
+                js_tmp = tmp.name
+                tmp.write(js_src.read_bytes())
+            os.replace(js_tmp, js_dest)
+        finally:
+            if js_tmp and Path(js_tmp).exists():
+                Path(js_tmp).unlink()
     return dest
 
 
@@ -267,7 +280,7 @@ class HarnessHandler(BaseHTTPRequestHandler):
         if not spec:
             return None, None
         ctype, name = spec
-        root = self.output if name == "task-harness.html" else self.source
+        root = self.output if name in ("task-harness.html", "app.js") else self.source
         fp = root / name
         if not fp.is_file():
             return None, None
