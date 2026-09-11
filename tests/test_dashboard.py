@@ -221,12 +221,18 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("刷新任务", text)
         self.assertIn("评审未通过", js)
         self.assertIn("选择项目任务目录", js)
-        self.assertTrue((ROOT / "dashboard/ui/index.html").exists())
-        self.assertEqual(text, (ROOT / "dashboard/ui/index.html").read_text(encoding="utf-8"))
         self.assertIn("./app.js", text)
-        js = (ROOT / "references/templates/app.js").read_text(encoding="utf-8")
-        self.assertEqual(js, (ROOT / "dashboard/ui/app.js").read_text(encoding="utf-8"))
-        self.assertIn("probe_harness_dir", js)
+        self.assertIn("showDirectoryPicker", js)
+        self.assertNotIn("isTauri", js)
+        self.assertNotIn("__TAURI__", js)
+        self.assertNotIn("probe_harness_dir", js)
+        self.assertTrue((ROOT / "dashboard/TaskHarness.sln").exists())
+        self.assertTrue((ROOT / "dashboard/TaskHarness/TaskHarness.csproj").exists())
+        self.assertTrue((ROOT / "dashboard/TaskHarness.Core/TaskHarness.Core.csproj").exists())
+        self.assertTrue((ROOT / "dashboard/Build.ps1").exists())
+        self.assertFalse((ROOT / "dashboard/ui").exists())
+        self.assertFalse((ROOT / "dashboard/src-tauri").exists())
+        self.assertFalse((ROOT / "dashboard/package.json").exists())
 
 
 if __name__ == "__main__":

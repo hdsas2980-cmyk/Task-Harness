@@ -2,20 +2,16 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const htmlPath = path.join(__dirname,'../dashboard/ui/index.html');
 const templatePath = path.join(__dirname,'../references/templates/task-harness.html');
-const jsPath = path.join(__dirname,'../dashboard/ui/app.js');
 const jsTemplatePath = path.join(__dirname,'../references/templates/app.js');
-const html = fs.readFileSync(htmlPath,'utf8');
-const code = fs.readFileSync(jsPath,'utf8');
-assert.equal(fs.readFileSync(templatePath,'utf8'), html);
-assert.equal(fs.readFileSync(jsTemplatePath,'utf8'), code);
+const html = fs.readFileSync(templatePath,'utf8');
+const code = fs.readFileSync(jsTemplatePath,'utf8');
 assert.match(html, /载入任务/);
 assert.match(html, /刷新任务/);
 assert.match(html, /\.\/app\.js/);
 assert.match(code, /选择项目任务目录/);
 assert.match(code, /showDirectoryPicker/);
-assert.match(code, /probe_harness_dir/);
+assert.doesNotMatch(code, /isTauri|__TAURI__|probe_harness_dir/);
 assert.match(code, /正在选择项目任务目录/);
 assert.doesNotMatch(html, /载入示例|清空|type="file"|__HARNESS_SNAPSHOT__|id="snapshot"/);
 
@@ -96,63 +92,6 @@ function run(extras){
   file.scope.fetch=async url=>{file.scope.fetches++; return {ok:true,status:200,text:async()=>String(url).endsWith('tasks.json')?JSON.stringify({project:'live',tasks:[{id:'a',desc:'<img src=x onerror=alert(1)>',status:'passed',priority:1},{id:'b',status:'pending',depends_on:['a'],priority:2}]}):''};};
   await file.node('refresh').onclick();
   assert.match(file.node('tasks').innerHTML,/已阻塞|门禁缺口|picked-1|已通过/);
-
-  const calls=[];
-  const tauriWin = {
-    __TAURI__:{
-      core:{
-        invoke: async (cmd, args)=>{
-          calls.push([cmd, args||null]);
-          if(cmd==='probe_harness_dir') return 'E:/proj';
-          if(cmd==='read_harness') return {path: args.path + '/.harness', files:{'tasks.json': JSON.stringify({project:'cwd',tasks:[{id:'cwd-1',status:'active',priority:1}]})}};
-          if(cmd==='pick_harness_dir') return 'E:/other';
-          throw Error('unknown '+cmd);
-        }
-      }
-    }
-  };
-  const tauri = run({window: tauriWin, location:{protocol:'https:',href:'https://tauri.localhost/',reload(){}}});
-  await new Promise(r=>setImmediate(r));
-  await new Promise(r=>setImmediate(r));
-  assert.equal(calls[0][0], 'probe_harness_dir');
-  assert.equal(calls[1][0], 'read_harness');
-  assert.match(tauri.node('tasks').innerHTML,/cwd-1/);
-  assert.match(tauri.node('status').textContent,/已载入/);
-  assert.match(tauri.node('project').textContent,/\.harness/);
-
-  calls.length = 0;
-  tauriWin.__TAURI__.core.invoke = async (cmd, args)=>{
-    calls.push([cmd, args||null]);
-    if(cmd==='pick_harness_dir') return 'E:/picked';
-    if(cmd==='read_harness') return {path: args.path, files:{'tasks.json': JSON.stringify({project:'picked',tasks:[{id:'pick-1',status:'blocked',priority:1}]})}};
-    throw Error('unexpected '+cmd);
-  };
-  await tauri.node('load').onclick();
-  assert.equal(calls[0][0], 'pick_harness_dir');
-  assert.equal(calls[1][0], 'read_harness');
-  assert.match(tauri.node('tasks').innerHTML,/pick-1/);
-  assert.match(tauri.node('status').textContent,/已载入/);
-
-  calls.length = 0;
-  tauriWin.__TAURI__.core.invoke = async (cmd)=>{
-    calls.push(cmd);
-    if(cmd==='pick_harness_dir') return null;
-    throw Error('should not '+cmd);
-  };
-  await tauri.node('load').onclick();
-  assert.deepEqual(calls, ['pick_harness_dir']);
-  assert.match(tauri.node('status').textContent,/已取消选择目录/);
-  assert.match(tauri.node('tasks').innerHTML,/pick-1/);
-
-  const emptyCalls=[];
-  const empty = run({
-    window:{__TAURI__:{core:{invoke: async (cmd)=>{ emptyCalls.push(cmd); if(cmd==='probe_harness_dir') return null; throw Error('no '+cmd); }}}},
-    location:{protocol:'https:',href:'https://tauri.localhost/',reload(){}}
-  });
-  await new Promise(r=>setImmediate(r));
-  await new Promise(r=>setImmediate(r));
-  assert.deepEqual(emptyCalls, ['probe_harness_dir']);
-  assert.match(empty.node('status').textContent,/当前目录没有任务|载入任务/);
 
   console.log('UI logic: assertions passed (mock DOM; not browser visual verification)');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,30 +1,32 @@
-# 长任务看板（便携单文件）
+# 长任务看板（WPF 便携单文件）
 
-只要一个 `TaskHarness.exe`。**不要安装包。** 启动时自动探测当前工作目录和 exe 所在目录的 `tasks.json`（或 `.harness/tasks.json`）。「载入任务」= 另选项目任务目录。只读。
+只要一个 `TaskHarness.exe`。**不要安装包，不要 Tauri / Electron / WebView2。**
 
-## 依赖边界（说清楚）
+载入任务 = 系统文件夹框，选择项目根或 `.harness`。启动时先探测当前工作目录、exe 目录和上次目录的 `tasks.json`。只读，不写任务真相源。
+
+技能里的 HTTP 看板仍是 `references/templates/` 的 Python SPA，和这个桌面壳分开。
+
+## 依赖边界
 
 | 依赖 | 要不要 |
 |------|--------|
-| Node / Python / 安装器 / 网络字体 | 不要。运行时零这些东西 |
-| WebView2（Win10/11 的 Edge 组件） | 要。不内嵌，否则体积会到 100MB+ |
+| Node / Python / npm / WebView2 / 安装器 | 不要 |
+| 本机已装的 .NET 桌面运行时 | 不要。发布的是自包含 win-x64 单文件，运行时打进 exe |
 
-Windows 11 自带；Windows 10 装了 Edge 一般也有。没有 WebView2 时窗口起不来，去装 [Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) 即可，应用本身仍是单文件。
-
-真正「连 WebView2 都不靠」只能改成原生 GUI（egui 等）重画画板，那是另一条路。
+自包含所以体积大约几十 MB，换来的是拷走就能跑。
 
 ## 自己编译
 
 ```powershell
-cd dashboard
-npm install
-npm run build
+powershell -ExecutionPolicy Bypass -File .\dashboard\Build.ps1
 ```
 
-`npm run build` 已关掉 NSIS，只产出：
+产出：
 
 ```text
-src-tauri\target\release\TaskHarness.exe
+dashboard\dist\TaskHarness.exe
 ```
 
-把它拷走就能用，旁边不需要 dll、不需要 resources 目录。
+启动：`dashboard\Start.bat`，或直接双击该 exe。
+
+源码/XAML 使用 UTF-8（带 BOM），对齐 JNPF 3.5.X 的 WPF 控制台方案：WPF + .NET 8 + CommunityToolkit.Mvvm。不做托盘，不做 NSIS。

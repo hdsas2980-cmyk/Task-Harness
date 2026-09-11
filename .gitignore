@@ -2,7 +2,11 @@ __pycache__/
 *.py[cod]
 _upstream/
 _build/
+_gen_*.py
+_fix.py
+_wpf_*.py
 
-dashboard/node_modules/
-dashboard/src-tauri/target/
-dashboard/src-tauri/gen/
+dashboard/**/bin/
+dashboard/**/obj/
+dashboard/dist/
+*.user

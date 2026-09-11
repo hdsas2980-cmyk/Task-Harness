@@ -28,7 +28,7 @@ const setText = (id,text) => { const el = $(id); if(el) el.textContent = text; }
 function status(text, error=false){ timers.clear(); setText('status',text); const el = $('status'); if(el && el.classList && el.classList.toggle) el.classList.toggle('err',error); }
 function flash(text){ const el = $('status'); const prev = el ? el.textContent : ''; status(text); timers.set(()=>status(prev), 1600); }
 function isLocalFile(){ return location.protocol === 'file:'; }
-function localFileHint(){ return '点「载入任务」选择项目任务目录（.harness 或项目根）。桌面壳可直接选文件夹。'; }
+function localFileHint(){ return '点「载入任务」选择项目任务目录（.harness 或项目根）。独立桌面壳 TaskHarness.exe 用系统文件夹框，不依赖浏览器。'; }
 function parse(texts){
   if(!Object.hasOwn(texts,'tasks.json')) throw Error('缺少任务文件；原任务保持不变');
   let tasks;
@@ -335,15 +335,7 @@ function guarded(fn){
   chain = run.catch(()=>{});
   return run;
 }
-function isTauri(){ return !!(window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke); }
-function canPickDir(){ return isTauri() || typeof window.showDirectoryPicker === 'function'; }
-function invoke(cmd, args){ return window.__TAURI__.core.invoke(cmd, args); }
-async function readTauri(path){
-  const payload = await invoke('read_harness', {path});
-  rememberPath(payload.path);
-  dirHandle = null;
-  return payload.files;
-}
+function canPickDir(){ return typeof window.showDirectoryPicker === 'function'; }
 let selectedPath = '';
 let dirHandle = null;
 function setDirLabel(path){
@@ -354,7 +346,6 @@ function setDirLabel(path){
 }
 function rememberPath(path){
   selectedPath = path || '';
-  try{ if(selectedPath && isTauri()) localStorage.setItem('task-harness.lastDir', selectedPath); }catch(e){}
   setDirLabel(selectedPath);
 }
 async function fileFromHandle(dir, name){
@@ -384,14 +375,8 @@ async function readFromHandle(root){
   return texts;
 }
 async function pickAndRead(){
-  if(isTauri()){
-    status('正在选择项目任务目录…');
-    const picked = await invoke('pick_harness_dir');
-    if(!picked) return {cancelled:true};
-    const texts = await readTauri(picked);
-    return {texts};
-  }
   if(typeof window.showDirectoryPicker === 'function'){
+    status('正在选择项目任务目录…');
     const handle = await window.showDirectoryPicker({mode:'read'});
     const texts = await readFromHandle(handle);
     if(!texts) throw Error('该目录没有 tasks.json（可选 .harness 或项目根）');
@@ -404,9 +389,6 @@ async function pickAndRead(){
   return {texts: texts, via:'http'};
 }
 async function rereadSelected(){
-  if(isTauri() && selectedPath){
-    return await readTauri(selectedPath);
-  }
   if(dirHandle){
     const texts = await readFromHandle(dirHandle);
     if(!texts) throw Error('已选目录里找不到 tasks.json');
@@ -513,29 +495,7 @@ document.addEventListener('keydown', e=>{
 render();
 setDirLabel('');
 try{ document.documentElement.setAttribute('data-boot','ok'); }catch(e){}
-if(isTauri()){
-  (async()=>{
-    let last = '';
-    try{ last = localStorage.getItem('task-harness.lastDir') || ''; }catch(e){}
-    let probed = '';
-    try{ probed = await invoke('probe_harness_dir') || ''; }catch(e){ probed = ''; }
-    const seen = new Set();
-    for(const path of [probed, last]){
-      if(!path || seen.has(path)) continue;
-      seen.add(path);
-      try{
-        const texts = await readTauri(path);
-        install(texts, '已载入 ' + (selectedPath || path));
-        return;
-      }catch(e){
-        if(path === last){
-          try{ localStorage.removeItem('task-harness.lastDir'); }catch(_){}
-        }
-      }
-    }
-    status('当前目录没有任务，点「载入任务」选择项目任务目录');
-  })().catch(e=>status('启动载入失败：' + ((e && e.message) || e || '未矡错误'), true));
-}else if(isLocalFile()){
+if(isLocalFile()){
   status(localFileHint(), !canPickDir());
 }else{
   guarded(async()=>{
