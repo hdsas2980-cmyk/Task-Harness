@@ -17,7 +17,7 @@ const means = {
   regressed:'曾经通过，但因依赖/接口变更失效，需要重做'
 };
 const fillOf = {pending:8,active:42,evidence_ready:78,passed:100,blocked:28,regressed:55};
-let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'list', eventFilter = 'all';
+let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'list', eventFilter = 'both';
 let chain = Promise.resolve(), statusTimer = null;
 const timers = {
   set(fn, ms){ if(typeof setTimeout === 'function'){ timers.id = setTimeout(fn, ms); } },
@@ -266,10 +266,15 @@ function renderAll(){
   if(detailEl){
     if(!current) detailEl.innerHTML = '<p class="empty-note">没有选中任务</p>';
     else{
-      const name = current.desc || current.description || current.id;
-      detailEl.innerHTML = '<p class="current-name" title="' + esc(name) + '">' + esc(name) + '</p>'
-        + '<p class="current-status" style="color:' + colors[current.status] + '">'
-        + '<i class="dot" style="background:' + colors[current.status] + '" aria-hidden="true"></i>' + labels[current.status] + '</p>';
+      const g = gate(current);
+      const tDeps = current.depends_on || [];
+      detailEl.innerHTML = '<p class="id">' + esc(current.id) + '</p>'
+        + '<p>' + labels[current.status] + ' · 优先级 ' + esc(current.priority ?? '—') + '</p>'
+        + '<p>' + esc(current.desc || current.description || '未填写') + '</p>'
+        + '<p class="muted">依赖 ' + (tDeps.length ? esc(tDeps.join('、')) : '无') + '</p>'
+        + (current.reason ? '<p class="warn">阻塞原因：' + esc(typeof current.reason === 'string' ? current.reason : JSON.stringify(current.reason)) + '</p>' : '')
+        + '<p><code>' + esc(current.verify || '未填写验证') + '</code></p>'
+        + '<p class="' + (g.startsWith('门禁') ? 'warn' : 'muted') + '">' + esc(g || '无门禁缺口') + '</p>';
     }
   }
 
@@ -331,26 +336,30 @@ function renderEvents(current){
   const eventsEl = $('events');
   if(!eventsEl) return;
   const currentId = current && current.id;
+  const belongsToCurrent = x => currentId && !isMetaRow(x) && x.task === currentId;
   const items = [
-    ...model.evidence.filter(x => !isMetaRow(x)).map(x => ({...x, kind:'e'})),
-    ...model.reviews.filter(x => !isMetaRow(x)).map(x => ({...x, kind:'r'}))
+    ...model.evidence.filter(belongsToCurrent).map(x => ({...x, kind:'e'})),
+    ...model.reviews.filter(belongsToCurrent).map(x => ({...x, kind:'r'}))
   ].sort((a,b)=>String(b.ts || '').localeCompare(String(a.ts || '')));
   const filtered = items.filter(x => {
     if(eventFilter === 'e') return x.kind === 'e';
     if(eventFilter === 'r') return x.kind === 'r';
-    if(eventFilter === 'current') return currentId && x.task === currentId;
     return true;
   });
   const shown = filtered.slice(0, 80);
-  setText('events-count', (shown.length === filtered.length ? (filtered.length + ' 条') : (shown.length + '/' + filtered.length + ' 条'))
-    + (currentId ? ' · 当前 ' + currentId : ''));
+  setText('events-count', currentId
+    ? (shown.length === filtered.length ? (filtered.length + ' 条') : (shown.length + '/' + filtered.length + ' 条')) + ' · 当前 ' + currentId
+    : '未选中任务');
   const filterBtns = (document.querySelectorAll && document.querySelectorAll('#event-filters [data-evf]')) || [];
   filterBtns.forEach(btn => {
     const key = (btn.dataset && btn.dataset.evf) || (btn.getAttribute && btn.getAttribute('data-evf'));
     if(btn.setAttribute) btn.setAttribute('aria-current', eventFilter === key ? 'true' : 'false');
   });
+  const empty = !currentId ? '请先在任务列表中选择任务'
+    : eventFilter === 'e' ? '当前任务暂无证据'
+    : eventFilter === 'r' ? '当前任务暂无评审' : '当前任务暂无证据或评审';
   eventsEl.innerHTML = shown.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
-    || '<p class="empty-note">暂无证据或评审</p>';
+    || '<p class="empty-note">' + empty + '</p>';
 }
 async function fetchOne(name){
   const errs = []; let notFound = false;
@@ -689,6 +698,13 @@ $('gantt').addEventListener('click', pickRow);
 const evOpen = $('events-open'), evClose = $('events-close'), evDrawer = $('events-drawer');
 if(evOpen) evOpen.addEventListener('click', openEvents);
 if(evClose) evClose.addEventListener('click', closeEvents);
+const evFilters = $('event-filters');
+if(evFilters) evFilters.addEventListener('click', e=>{
+  const b = e.target && e.target.closest ? e.target.closest('[data-evf]') : null;
+  if(!b || !['both','e','r'].includes(b.dataset.evf)) return;
+  eventFilter = b.dataset.evf;
+  render();
+});
 if(evDrawer) evDrawer.addEventListener('click', e=>{
   const t = e.target;
   if(t && t.getAttribute && t.getAttribute('data-close-drawer')) closeEvents();
