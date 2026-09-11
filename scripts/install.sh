@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # task-harness v3.2 (TRAE edition) install script (Linux/macOS/Windows-bash)
 # Usage: git clone <repo> && cd Task-Harness && bash scripts/install.sh
-#        Add --claude to also install to legacy Claude Code + CC Switch targets.
+#        Optional --claude writes legacy Claude/CC Switch copies; prefer the claude branch instead.
 # Idempotent: safe to rerun; overwrites to current repo state each time.
 set -euo pipefail
 

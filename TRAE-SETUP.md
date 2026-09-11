@@ -24,7 +24,7 @@ bash scripts/install.sh
 | 评审子智能体 | `~/.trae-cn/agents/harness-reviewer.md` | 独立上下文评审 |
 
 可选：加 `--claude`（bash）/ `-Claude`（powershell）时，额外把 legacy 版本装到
-`~/.claude` 与 `~/.cc-switch`，实现双生态共存（决策项 A）。
+`~/.claude` 与 `~/.cc-switch`，仅作遗留兼容；新安装请改用 claude 分支，不要在 TRAE 安装器里混装 Claude。
 
 > 只在你自己的机器上拷贝，而不是整库：把 `references/templates/*` 里 6 个模板
 > （tasks.json / evidence.jsonl / reviews.jsonl / progress.txt / init.py / init.sh /

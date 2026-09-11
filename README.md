@@ -1,4 +1,11 @@
-# Task Harness v3.2 (TRAE edition)
+# Task Harness v3.2 — TRAE / Trae Work
+
+这是 TRAE 宿主分支。核心协议在 \main\。本分支安装到 \~/.trae-cn\（技能、斜杠命令、评审子智能体）。不要把本分支默认装进 Claude；Claude 请用 \claude\ 分支。
+
+分支表见 [BRANCHES.md](BRANCHES.md)。
+
+---
+
 
 长时运行任务的最小骨架。一轮一任务、状态落盘、证据加独立评审判定完成，
 主会话上下文不随任务数增长。适用于需跨多次会话增量推进的大型工程。

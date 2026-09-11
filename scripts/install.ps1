@@ -1,6 +1,6 @@
 # task-harness v3.2 (TRAE edition) install script (Windows PowerShell)
 # Usage: git clone <repo>; cd Task-Harness; powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1
-#        Add -Claude to also install the legacy Claude Code + CC Switch targets.
+#        Optional -Claude writes legacy Claude/CC Switch copies; prefer the claude branch instead.
 # Idempotent: safe to rerun; overwrites to current repo state each time.
 $ErrorActionPreference = "Stop"
 
