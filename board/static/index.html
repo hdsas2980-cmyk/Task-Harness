@@ -352,11 +352,13 @@ details.log pre{margin:0;padding:0 16px 14px;white-space:pre-wrap;word-break:bre
 .main{grid-column:2;grid-row:2;display:flex;flex-direction:column;gap:0;padding:0 16px 12px;min-height:0;min-width:0}
 .statusbar{grid-column:2;grid-row:3}
 .side{display:none !important}
-.rail-detail{flex:1;min-height:0;overflow:auto;padding:10px 10px 8px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface)}
+.rail-detail{flex:0 0 auto;min-width:0;overflow:hidden;padding:10px 10px 8px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface)}
 .rail-detail h2{margin-bottom:8px}
 .rail-detail .detail{font-size:12.5px}
-.rail-detail .detail .id{font:500 13px/1.3 var(--mono);word-break:break-all}
+.rail-detail .current-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .rail-detail .detail p{margin:0 0 6px}
+.rail-detail .detail .current-status{display:flex;align-items:center;gap:6px;margin:0}
+.rail > .keys{margin-top:auto}
 .next-panel{padding:16px;overflow:auto}
 .next-panel .hero{height:auto;flex:none;background:transparent;border:0;padding:4px 8px 12px 18px}
 .next-panel .hero-id{font:500 28px/1.15 var(--mono)}
@@ -477,10 +479,6 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
 .event .badge.ok{color:var(--st-passed);border-color:color-mix(in oklch,var(--st-passed) 45%,var(--line))}
 .event .badge.bad{color:var(--st-blocked);border-color:color-mix(in oklch,var(--st-blocked) 45%,var(--line))}
 .event .badge.miss{color:var(--faint)}
-.detail-events{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
-.detail-events h3{margin:0 0 8px;font:500 11px/1 var(--sans);letter-spacing:.07em;color:var(--faint)}
-.detail-events .event{padding:8px 0}
-.detail-events .kv{grid-template-columns:56px minmax(0,1fr)}
 </style>
 </head>
 <body>
@@ -500,7 +498,6 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
     <section class="rail-detail" aria-label="当前行">
       <h2>当前行</h2>
       <div class="detail" id="detail"></div>
-      <div class="detail-events" id="detail-events"></div>
     </section>
     <div class="keys">
       <h2>键盘</h2>

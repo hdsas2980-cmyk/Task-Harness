@@ -266,15 +266,10 @@ function renderAll(){
   if(detailEl){
     if(!current) detailEl.innerHTML = '<p class="empty-note">没有选中任务</p>';
     else{
-      const g = gate(current);
-      const tDeps = current.depends_on || [];
-      detailEl.innerHTML = '<p class="id">' + esc(current.id) + '</p>'
-        + '<p>' + labels[current.status] + ' · 优先级 ' + esc(current.priority ?? '—') + '</p>'
-        + '<p>' + esc(current.desc || current.description || '未填写') + '</p>'
-        + '<p class="muted">依赖 ' + (tDeps.length ? esc(tDeps.join('、')) : '无') + '</p>'
-        + (current.reason ? '<p class="warn">阻塞原因：' + esc(typeof current.reason === 'string' ? current.reason : JSON.stringify(current.reason)) + '</p>' : '')
-        + '<p><code>' + esc(current.verify || '未填写验证') + '</code></p>'
-        + '<p class="' + (g.startsWith('门禁') ? 'warn' : 'muted') + '">' + esc(g || '无门禁缺口') + '</p>';
+      const name = current.desc || current.description || current.id;
+      detailEl.innerHTML = '<p class="current-name" title="' + esc(name) + '">' + esc(name) + '</p>'
+        + '<p class="current-status" style="color:' + colors[current.status] + '">'
+        + '<i class="dot" style="background:' + colors[current.status] + '" aria-hidden="true"></i>' + labels[current.status] + '</p>';
     }
   }
 
@@ -356,14 +351,6 @@ function renderEvents(current){
   });
   eventsEl.innerHTML = shown.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
     || '<p class="empty-note">暂无证据或评审</p>';
-  const detailEv = $('detail-events');
-  if(detailEv){
-    if(!currentId){ detailEv.innerHTML = ''; return; }
-    const mine = items.filter(x => x.task === currentId).slice(0, 4);
-    detailEv.innerHTML = mine.length
-      ? '<h3>证据 / 评审</h3>' + mine.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
-      : '<h3>证据 / 评审</h3><p class="muted">该任务还没有证据或评审</p>';
-  }
 }
 async function fetchOne(name){
   const errs = []; let notFound = false;

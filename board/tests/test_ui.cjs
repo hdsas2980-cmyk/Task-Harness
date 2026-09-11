@@ -112,7 +112,7 @@ function run(extras){
   assert.match(http.node('status').textContent,/已根据会话载入|已载入/);
   assert.match(http.node('project').textContent,/proj/);
   vm.runInContext(
-    'install({"tasks.json":JSON.stringify({project:"demo",tasks:[{id:"t-01",status:"evidence_ready",priority:1,desc:"x"}]}),'
+    'install({"tasks.json":JSON.stringify({project:"demo",tasks:[{id:"t-01",status:"evidence_ready",priority:1,desc:"任务中文标题",verify:"private-verify-command",depends_on:["upstream-task"],reason:"private-blocking-reason"}]}),'
     + '"evidence.jsonl":JSON.stringify({id:"ev-01",task:"t-01",cmd:"go test ./...",exit:0,tests:"12 passed",rev:"abc123",encoding:"utf-8",ts:"2026-09-11T12:00:00Z"}),'
     + '"reviews.jsonl":JSON.stringify({id:"rv-01",task:"t-01",ev:"ev-01",reviewer_context:"codex-independent-task",verdict:"pass",reason:"范围与验证通过",ts:"2026-09-11T12:05:00Z"})}, "证据")',
     http.scope
@@ -123,7 +123,33 @@ function run(extras){
   assert.match(http.node('events').innerHTML, /utf-8/);
   assert.match(http.node('events').innerHTML, /范围与验证通过/);
   assert.match(http.node('events').innerHTML, /codex-independent-task/);
-  assert.match(http.node('detail-events').innerHTML, /退出码/);
+  // The narrow rail is a selection cue, not a second audit/details panel.
+  const detail = http.node('detail').innerHTML;
+  assert.equal((detail.match(/<p[ >]/g) || []).length, 2, 'current row contains only task name and status');
+  assert.match(detail, /任务中文标题/);
+  assert.match(detail, /待独立评审/);
+  assert.doesNotMatch(detail, /优先级|依赖|门禁|private-verify-command|private-blocking-reason|upstream-task|go test|退出码/);
+  assert.equal(http.node('detail-events').innerHTML, '');
+  assert.doesNotMatch(html, /detail-events/);
+  assert.doesNotMatch(code, /detail-events/);
+
+  const stateNames = {pending:'待处理', active:'进行中', evidence_ready:'待独立评审', passed:'已通过', blocked:'已阻塞', regressed:'需回归'};
+  const stateTokens = {pending:'pending', active:'active', evidence_ready:'ready', passed:'passed', blocked:'blocked', regressed:'regressed'};
+  for (const [state, label] of Object.entries(stateNames)) {
+    vm.runInContext(`model.tasks.tasks[0].status = ${JSON.stringify(state)}; render()`, http.scope);
+    assert.ok(http.node('detail').innerHTML.includes(label));
+    assert.ok(http.node('detail').innerHTML.includes('var(--st-' + stateTokens[state] + ')'));
+    assert.equal((http.node('detail').innerHTML.match(/<p[ >]/g) || []).length, 2);
+  }
+  vm.runInContext('model.tasks.tasks.push({id:"fallback-id",status:"pending"}); selected = 1; render()', http.scope);
+  assert.match(http.node('detail').innerHTML, /fallback-id/);
+  vm.runInContext(`model.tasks.tasks[1].desc = '<img src=x onerror="alert(1)">'; render()`, http.scope);
+  assert.doesNotMatch(http.node('detail').innerHTML, /<img/);
+  assert.match(http.node('detail').innerHTML, /&lt;img/);
+  http.node('search').value = 'no-such-task';
+  vm.runInContext('render()', http.scope);
+  assert.match(http.node('detail').innerHTML, /没有选中任务/);
+  assert.doesNotMatch(http.node('detail').innerHTML, /fallback-id|任务中文标题/);
 
   console.log('UI logic: assertions passed (mock DOM; not browser visual verification)');
 })().catch(e=>{console.error(e);process.exitCode=1;});
