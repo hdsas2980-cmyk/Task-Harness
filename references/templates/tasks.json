@@ -19,6 +19,48 @@
       "depends_on": ["t-01"],
       "verify": "可执行的验证命令",
       "status": "pending"
+    },
+    {
+      "id": "bundle-user-api",
+      "priority": 3,
+      "desc": "用户 API 实现与测试（原子束）",
+      "bundle": [
+        {
+          "id": "t-backend-03",
+          "desc": "实现 GET /api/users 后端接口",
+          "verify": "curl http://localhost:3000/api/users"
+        },
+        {
+          "id": "t-test-03",
+          "desc": "补充用户 API 集成测试",
+          "verify": "npm test -- user-api.test.ts"
+        }
+      ],
+      "depends_on": ["t-02"],
+      "verify": "npm test -- user-api.test.ts && curl http://localhost:3000/api/users",
+      "status": "pending",
+      "note": "束内任务按数组顺序串行推进，单个会话完成整个束，所有任务 passed 才算束 passed"
+    },
+    {
+      "id": "bundle-order-api",
+      "priority": 3,
+      "desc": "订单 API 实现与测试（原子束）",
+      "bundle": [
+        {
+          "id": "t-backend-04",
+          "desc": "实现 POST /api/orders 后端接口",
+          "verify": "curl -X POST http://localhost:3000/api/orders"
+        },
+        {
+          "id": "t-test-04",
+          "desc": "补充订单 API 集成测试",
+          "verify": "npm test -- order-api.test.ts"
+        }
+      ],
+      "depends_on": ["t-02"],
+      "verify": "npm test -- order-api.test.ts && curl -X POST http://localhost:3000/api/orders",
+      "status": "pending",
+      "note": "与 bundle-user-api 写范围互斥，可并行推进"
     }
   ]
 }

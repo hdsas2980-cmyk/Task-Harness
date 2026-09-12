@@ -13,7 +13,7 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 - **存在性先于实现**：先过 ponytail 阶梯，砍掉不需要、重复或可由平台能力解决的任务。
 - **证据 + 独立评审才算完成**：`passed` 不是模型自报，而是可重放的验证证据和独立评审共同成立。
 
-状态全部落盘，主 Codex 任务只读取当前任务和它触及的文件，不随任务数量增长而回读历史。宁可骨架简陋，不可问责缺失：不因“精简”砍掉验证、安全、错误处理和可回滚性。
+状态全部落盘，主 Codex 任务只读取当前任务和它触及的文件，不随任务数量增长而回读历史。宁可骨架简陋，不可问责缺失：不因"精简"砍掉验证、安全、错误处理和可回滚性。
 
 本版本是 **Codex 原生适配版**：不依赖 Claude Code、CC Switch、gstack、MCP 或其他第三方 Skill；不写入 `.cc-switch\skills`；不使用 Claude 专属 slash command；本分支不包含 `commands/` 目录。
 
@@ -32,9 +32,116 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 2. 不回读全量清单、不回读旧证据；只读取推进当前任务所需的最小范围。
 3. `passed` 必须同时存在一条对应 `evidence.jsonl` 记录和一条 `reviews.jsonl` 的 `pass` 记录。
 4. 评审必须在独立上下文完成，并记录评审上下文/来源。
-5. 任何阻塞必须写入结构化 reason；不得用“看起来没问题”替代验证。
+5. 任何阻塞必须写入结构化 reason；不得用"看起来没问题"替代验证。
 6. 已通过任务受依赖、接口或环境变化影响时，标记 `regressed` 并回到 `active`。
 
+## 任务束（Bundle）
+
+**定义**: 多个任务组成的原子工作单元，束内任务必须在同一个 Codex 会话中串行完成，全部通过才算束完成。
+
+**适用场景**:
+- API 实现 + 对应测试（`t-backend-01` + `t-test-01`）
+- 数据模型变更 + 迁移脚本（`t-schema-02` + `t-migrate-02`）
+- 组件重构 + 依赖它的集成测试（`t-refactor-03` + `t-integration-03`）
+
+**契约**:
+```json
+{
+  "id": "bundle-user-api",
+  "priority": 1,
+  "desc": "用户 API 实现与测试",
+  "bundle": ["t-backend-01", "t-test-01"],
+  "depends_on": [],
+  "verify": "npm test -- user-api.test.ts",
+  "status": "pending"
+}
+```
+
+**推进规则**:
+1. 束内任务按数组顺序串行推进；
+2. 单个 Codex 会话推进整个束，不拆分到多会话；
+3. 束内任务不在 `tasks` 顶层数组出现，只在 `bundle` 字段内；
+4. 束的 `status` 由最后一个任务决定；所有任务 `passed` 才算束 `passed`；
+5. 束的 `verify` 是整束验证命令，不是单个任务的验证。
+
+**与多会话并行的关系**:
+- 束 = 单会话内的串行原子单元；
+- 多会话并行 = 多个束（或单任务）在不同会话中异步并行；
+- 例：会话 A 推进 `bundle-user-api`（backend + test），会话 B 推进 `bundle-order-api`（backend + test），两束并行。
+
+## 两种并行模式
+
+### 模式 1：多会话异步并行（create_thread）
+
+**触发条件**: 写范围互斥的任务或束，主线不需要立即获得结果。
+
+**流程**:
+1. 领袖会话检查 `tasks.json`，识别可并行任务（写范围互斥）；
+2. 创建 N 个实现会话，按 `references/codex-parallel.md` 命名（如 `前端v1-FE-6-用户列表`）；
+3. 用 `send_message_to_thread` 派发卡片，**不阻塞等待**；
+4. 主线继续记录派卡日志到 `progress.txt`，或处理其他任务；
+5. 各实现会话完成后，发送**结构化回报消息**给主线；
+6. 领袖收到回报后，推进评审或下一张卡。
+
+**回报格式契约**（详见 `references/codex-parallel.md`）:
+```
+【卡片 {id} 交付】状态: {status}, 文件: {changed_files}, evidence: {ev_id}, 提交: {commit_hash}
+```
+
+**关键**: 不用 `wait_threads` 阻塞主线；子会话完成后通过消息**主动通知**主线。
+
+**示例**:
+```
+领袖v1-AUD-1-门禁收口
+  ↓ 派发 FE-6、BE-7、TEST-8
+前端v1-FE-6-用户列表 ─┐
+后端v1-BE-7-用户API   ├─ 并行执行，各自完成后回报
+测试v1-TEST-8-集成测试 ─┘
+  ↓ 领袖收到 3 条回报
+领袖v1-AUD-2-评审收口
+```
+
+### 模式 2：子代理同步委托（spawn_agent）
+
+**触发条件**: 主线需要立即获得结果的 sidecar 任务（查询、分析、格式转换）。
+
+**流程**:
+1. 主线在推进任务时，发现需要辅助分析（依赖图、规格校验、快速查询）；
+2. 用 `spawn_agent` 创建子代理，**阻塞等待**返回；
+3. 子代理在主线上下文中执行，结果立即返回；
+4. 主线基于结果继续推进。
+
+**适用场景**:
+- 规格评审（需要立即知道 `tasks.json` 是否合理）
+- 依赖图分析（检查是否有环）
+- 格式校验（JSONL 是否合法）
+- 快速查询（Git 日志、文件列表）
+
+**不适用场景**:
+- 写代码（应该用 `create_thread` 异步并行）
+- 运行测试（可能耗时长，应该用 `create_thread`）
+- 独立评审（必须用 `create_thread` 隔离上下文）
+
+**示例**:
+```python
+# 主线推进 bundle-user-api
+def execute_bundle():
+    # 1. 用子代理检查依赖图
+    dep_check = spawn_agent("分析 tasks.json 依赖图，检查是否有环")
+    if dep_check.has_cycle:
+        return "blocked: 依赖图有环"
+    
+    # 2. 主线继续推进 t-backend-01
+    implement_backend()
+    
+    # 3. 用子代理验证 API 可用性
+    api_check = spawn_agent("curl http://localhost:3000/api/users，验证返回 200")
+    if api_check.status != 200:
+        return "blocked: API 未启动"
+    
+    # 4. 主线继续推进 t-test-01
+    implement_tests()
+```
 
 ## 多会话并行（Codex 专属）
 
@@ -66,61 +173,36 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 
 1. 对候选任务逐级过 ponytail 阶梯，移除伪需求、重复实现和不必要依赖。
 2. 创建 `tasks.json`：稳定 `id`、`priority`、一句话 `desc`、`depends_on`、可执行 `verify`、`status`。
-3. 按 `references/review/spec-review.md` 做规格评审，检查依赖环、路径归属、命令可执行性和工程原则。
-4. 设计评审结论追加到 `progress.txt`；不要把评审意见只留在对话里。
-5. 编排落盘即可。可视化看板是独立目录，不随技能安装。
+3. 识别需要原子推进的任务对，创建 `bundle`（API + 测试、模型 + 迁移）。
+4. 按 `references/review/spec-review.md` 做规格评审，检查依赖环、路径归属、命令可执行性和工程原则。
+5. 设计评审结论追加到 `progress.txt`；不要把评审意见只留在对话里。
+6. 编排落盘即可。可视化看板是独立目录，不随技能安装。
 
 ### 相 2 · 执行（每个 Codex 任务）
 
 1. 读取 `tasks.json` 与 `progress.txt` 末段，得到当前 eligible 任务。
-2. 只把一个 eligible 任务置为 `active`；修改前先确认范围和回滚点。
-3. 只读该任务及其触及的代码，采用最小改动完成实现。
-4. 执行任务的 `verify`；将命令、退出码、测试摘要、代码 revision 和时间追加到 `evidence.jsonl`。
-5. 将任务置为 `evidence_ready`，输出 `HARNESS_STATUS` 状态块，然后停止本轮。独立看板若已在轮询，会自己看到落盘变化。
+2. 只把一个 eligible 任务（或束）置为 `active`；修改前先确认范围和回滚点。
+3. 只读该任务（或束内任务）、依赖结论、任务声明路径和必要代码。
+4. 若是束，按 `bundle` 数组顺序串行推进每个任务；若是单任务，直接推进。
+5. 运行验证命令（束的 `verify` 是整束验证），记录可重放证据到 `evidence.jsonl`。
+6. 置为 `evidence_ready`，追加 `progress.txt`，输出 `HARNESS_STATUS`，停手。
+7. 不在本轮置 `passed`；等待独立评审。
 
-### 相 3 · 评审（独立 Codex 上下文）
+### 相 3 · 评审（独立上下文）
 
-1. 独立评审上下文只读取任务定义、变更范围、对应 evidence 和必要代码；禁止借用实现上下文的未落盘结论。
-2. 按 `references/review/completion-review.md` 核查功能、回归、安全、可维护性、验证质量和范围控制。
-3. 评审结尾必须输出恰好一行：
+1. 新建 Codex 评审任务，读取项目路径、任务对象、evidence、变更范围/diff、`references/review/completion-review.md`。
+2. 按 CRITICAL 门禁检查安全、范围、测试、状态、可恢复性。
+3. 输出 `HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>`。
+4. 主任务收到 `pass` 后，追加 `reviews.jsonl` 并将状态改为 `passed`；收到 `fail` 后，追加失败 review，将状态改回 `active`。
 
-   ```text
-   HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
-   ```
+## 门禁
 
-4. 将评审结果追加到 `reviews.jsonl`，`pass` 才能把 `evidence_ready` 改为 `passed`；`fail` 回到 `active` 并带新证据重试。看板只读 `tasks.json`，`pass` 必须当场回写，不能只在对话里宣布。
+门禁在人手短路之前成立，而不是事后安慰。
 
-## ponytail 阶梯
-
-1. 这个任务/代码需要存在吗？（YAGNI）
-2. 项目中已有可复用实现吗？
-3. 标准库/语言原生能解决吗？
-4. 平台或框架原生能力能解决吗？
-5. 已安装依赖能解决吗？
-6. 一行或一个配置能解决吗？
-7. 能跑通的最小实现是什么？
-
-绝不对“理解代码”偷懒；绝不砍验证、安全、错误处理和无障碍要求。
-
-## Codex 上下文预算规则
-
-- 启动时只读 `tasks.json` 必要字段和 `progress.txt` 末段，不把 100+ 任务全文塞进上下文。
-- 任务选择只依赖 `tasks.json` 的必要字段；旧 evidence/review 只按当前 `task` 过滤读取。
-- 大型日志、构建产物、截图、抓包和报告放 `.harness/artifacts/`，在任务里记录路径，不内联全文。
-- 需要跨轮传递的信息写入 `progress.txt` 最后一段；不要依赖聊天历史。
-- 每轮结束前清楚写出“已做 / 证据 / 下一步 / 阻塞”，让下一轮可从磁盘恢复。
-
-## 破坏性命令护栏
-
-执行下列动作前，必须先说明影响、目标绝对路径、可逆性，并取得本轮用户明确授权；验证或评审不得擅自执行：
-
-- 递归删除、批量移动、`git clean`、覆盖未备份文件；
-- `DROP TABLE`、`TRUNCATE`、无条件数据删除/更新；
-- `git reset --hard`、强制推送、改写已发布历史；
-- 部署、服务重启、权限/DNS/网关变更；
-- 未限制目录范围的递归搜索。
-
-授权只对当前明确动作有效，不自动扩展到邻近目录、其他项目或生产环境。所有覆盖/移动先建立带时间戳的备份或隔离副本。
+1. 依赖检查：置为 `active` 前，所有 `depends_on` 必须为 `passed`。
+2. 验证命令：`verify` 存在、可执行、退出 0。
+3. 独立评审：每个 `passed` 任务对应一条 `reviews.jsonl` 的 `pass` 记录，且 `reviewer_context` 不等于实现者上下文。
+4. 范围约束：变更文件逐个落在任务声明路径内；写操作有效，不自动扩展到邻近目录、其他项目或生产环境。所有覆盖/移动先建立带时间戳的备份或隔离副本。
 
 ## 文件契约
 
@@ -130,7 +212,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 - `evidence.jsonl`：追加 `{id, task, cmd, exit, tests, rev, ts}`，可增加 `encoding`、`artifacts`、`environment`。
 - `reviews.jsonl`：追加 `{id, task, ev, reviewer_context, verdict, reason, ts}`。
 - `progress.txt`：追加式叙事日志，只读取最后一段恢复背景。
-- `board/`：可视化看板是独立目录，不随技能安装；见上文「可视化看板」。
+- `board/`：可视化看板是独立目录，不随技能安装；见下文「可视化看板」。
 
 ## 可视化看板（独立项目，不随技能安装）
 
@@ -198,7 +280,7 @@ Windows 乱码：用 `board\start.ps1` / `board\start.bat`（已设 UTF-8 / `chc
 
 只有同时满足以下条件才报告完成：
 
-- 所有任务为 `passed`；
+- 所有任务（含束内任务）为 `passed`；
 - 每个 `passed` 任务均有对应 evidence 和独立 `pass` review；
 - 最新验证可重放，退出码为 0；
 - 没有未记录的阻塞、越界修改或未备份破坏性动作；
