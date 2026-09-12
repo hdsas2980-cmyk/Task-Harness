@@ -65,8 +65,10 @@ class CodexParallelDocTests(unittest.TestCase):
             "## 3. 创建与派卡",
             "## 4. 写范围与提交",
             "## 5. 子代理还是会话",
-            "## 6. 完成、看板、失败重建",
-            "## 7. 红线",
+            "## 6. 异步回报契约（create_thread 模式）",
+            "## 7. 完成、看板、失败重建",
+            "## 8. 子代理同步委托（spawn_agent 模式）",
+            "## 9. 红线",
         ):
             self.assertIn(heading, text)
         self.assertIn("一轮仍只推进一张卡", text)
