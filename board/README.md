@@ -55,4 +55,23 @@ bash board/start.sh "/path/to/project"
 | 更新 | 浏览器每 2 秒拉 `/api/snapshot`，文件变了才重绘 |
 | 写入 | 绝不写 `tasks.json` / evidence / reviews / progress |
 
-依赖：Python 3 标准库。
+依赖：Python 3.10+ 标准库。
+## 中文原字段与只读契约
+
+看板不翻译任务内容。服务端复用技能的 `scripts/check_task_harness_language.py`，检查任务、证据、评审和进度文件；失败时界面显示源文件位置，不展示英文兜底、不读取翻译文件、不自动改写数据。技术细节里的命令、原始测试输出、ID、路径、哈希保持原文。
+
+- 任务列表按中文阶段分组；卡片底部是状态阶段条（不是估算完成百分比）、证据和评审按钮。
+- 点击卡片上的按钮打开当前任务抽屉，摘要直接取中文 `summary` / `reason`；原始技术细节折叠展示。
+- 任务轨迹没有下拉选择，跟随当前行，只关联精确任务 ID 的进度段、证据和评审，不推测历史状态。
+- 进度日志按技能规定的 `## 时间 | task-id | 类型` 分段，最近记录优先，支持展开和查看原文。
+- 所有抽屉支持关闭按钮、遮罩和退出键；载入失败不会让用户无法关闭。
+
+## 统一发布
+
+在技能仓库运行：
+
+```text
+python -X utf8 scripts/build_board_release.py
+```
+
+生成 `board/release/TaskBoard` 和 `board/release/TaskBoard-windows.zip`。发布脚本仅从指定源码复制，附带同一份语言校验器；`manifest.json` 记录每个文件的 SHA-256，打包后逐字节核对目录与 ZIP。未知残留文件会阻断打包，不静默混入发布物。发布目录和 ZIP 是生成物，不是另一套源码。

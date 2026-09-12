@@ -50,7 +50,13 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
   "id": "bundle-user-api",
   "priority": 1,
   "desc": "用户 API 实现与测试",
-  "bundle": ["t-backend-01", "t-test-01"],
+  "name": "用户接口实现与测试",
+  "reason": "暂无阻塞",
+  "next": "实现接口后运行整束验证",
+  "bundle": [
+    {"id": "t-backend-01", "desc": "实现用户查询接口", "verify": "curl http://localhost:3000/api/users"},
+    {"id": "t-test-01", "desc": "补充用户查询集成测试", "verify": "npm test -- user-api.test.ts"}
+  ],
   "depends_on": [],
   "verify": "npm test -- user-api.test.ts",
   "status": "pending"
@@ -58,7 +64,7 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 ```
 
 **推进规则**:
-1. 束内任务按数组顺序串行推进；
+1. `bundle` 只接受任务对象数组，不接受 ID 字符串数组；束内任务按数组顺序串行推进；
 2. 单个 Codex 会话推进整个束，不拆分到多会话；
 3. 束内任务不在 `tasks` 顶层数组出现，只在 `bundle` 字段内；
 4. 束的 `status` 由最后一个任务决定；所有任务 `passed` 才算束 `passed`；
@@ -157,7 +163,7 @@ def execute_bundle():
 
 ## 状态机
 
-页面显示中文，JSON 仍使用英文枚举。
+页面显示中文，JSON 仍使用英文枚举。任务数据本身必须以中文为人类可读语言：`project`、`description`、任务 `name`、`desc`、`reason`、`next`、证据 `summary`、评审 `reason` 和进度叙事必须使用中文。不得新增 `_zh` 字段，不得新增看板翻译层，不考虑旧版兼容；ID、状态枚举、命令、路径、revision 和哈希保持原文。没有看板时，直接读取任务、证据、评审、进度文件也必须能理解当前目标、状态、阻塞、验证和评审。
 
 ```text
 pending（待处理） → active（进行中） → evidence_ready（待独立评审） → passed（已通过）
@@ -172,28 +178,28 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 ### 相 1 · 设计（一次性）
 
 1. 对候选任务逐级过 ponytail 阶梯，移除伪需求、重复实现和不必要依赖。
-2. 创建 `tasks.json`：稳定 `id`、`priority`、一句话 `desc`、`depends_on`、可执行 `verify`、`status`。
+2. 创建四份运行文件。`tasks.json` 顶层写中文 `project`、`description`；每个顶层任务写中文 `name`、`desc`、`reason`、`next`，并保留稳定 `id`、`priority`、`depends_on`、可执行 `verify`、英文 `status`。字段与示例见 `references/language-contract.md`。
 3. 识别需要原子推进的任务对，创建 `bundle`（API + 测试、模型 + 迁移）。
 4. 按 `references/review/spec-review.md` 做规格评审，检查依赖环、路径归属、命令可执行性和工程原则。
-5. 设计评审结论追加到 `progress.txt`；不要把评审意见只留在对话里。
+5. 设计评审结论以中文追加到 `progress.txt`；运行下方中文契约门禁，通过后才可交付编排。不要把评审意见只留在对话里。
 6. 编排落盘即可。可视化看板是独立目录，不随技能安装。
 
 ### 相 2 · 执行（每个 Codex 任务）
 
-1. 读取 `tasks.json` 与 `progress.txt` 末段，得到当前 eligible 任务。
+1. 读取 `tasks.json` 与 `progress.txt` 末段，得到当前可推进任务；先运行中文契约门禁，失败则修复源文件，不推进任务。
 2. 只把一个 eligible 任务（或束）置为 `active`；修改前先确认范围和回滚点。
 3. 只读该任务（或束内任务）、依赖结论、任务声明路径和必要代码。
 4. 若是束，按 `bundle` 数组顺序串行推进每个任务；若是单任务，直接推进。
-5. 运行验证命令（束的 `verify` 是整束验证），记录可重放证据到 `evidence.jsonl`。
-6. 置为 `evidence_ready`，追加 `progress.txt`，输出 `HARNESS_STATUS`，停手。
+5. 运行验证命令（束的 `verify` 是整束验证），记录可重放证据到 `evidence.jsonl`；必填中文 `summary`，原始 `tests` 输出另存，不翻译或替换。
+6. 更新中文 `reason`、`next` 并追加中文进度（任务编号、进展、状态、验证结论、下一步）；中文契约检查通过后才置为 `evidence_ready`，输出 `HARNESS_STATUS`，停手。
 7. 不在本轮置 `passed`；等待独立评审。
 
 ### 相 3 · 评审（独立上下文）
 
 1. 新建 Codex 评审任务，读取项目路径、任务对象、evidence、变更范围/diff、`references/review/completion-review.md`。
-2. 按 CRITICAL 门禁检查安全、范围、测试、状态、可恢复性。
+2. 独立运行中文契约检查，并人工确认说明有实质意义；再按严重问题门禁检查安全、范围、测试、状态、可恢复性。
 3. 输出 `HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>`。
-4. 主任务收到 `pass` 后，追加 `reviews.jsonl` 并将状态改为 `passed`；收到 `fail` 后，追加失败 review，将状态改回 `active`。
+4. 主任务将中文理由追加到 `reviews.jsonl`，更新中文 `reason`、`next` 和进度；再次通过中文契约检查后，收到 `pass` 才可改为 `passed`；收到 `fail` 则改回 `active`。
 
 ## 门禁
 
@@ -204,17 +210,28 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 3. 独立评审：每个 `passed` 任务对应一条 `reviews.jsonl` 的 `pass` 记录，且 `reviewer_context` 不等于实现者上下文。
 4. 范围约束：变更文件逐个落在任务声明路径内；写操作有效，不自动扩展到邻近目录、其他项目或生产环境。所有覆盖/移动先建立带时间戳的备份或隔离副本。
 
+5. 中文契约：设计交付、置为 `active` / `evidence_ready` / `passed` 前，必须执行以下只读命令（Python 3.10+）。`<技能目录>` 是当前所加载 `SKILL.md` 的所在目录；使用绝对路径，不切换到技能仓库执行任务，也不依赖源仓库。安装后的技能自带该脚本：
+
+```text
+python -X utf8 "<技能目录>/scripts/check_task_harness_language.py" "<任务项目绝对路径>"
+```
+
+退出非 0、缺少 Python/脚本、出现英文叙事或旁挂翻译字段时，均不得推进状态或签署 `pass`；只报告契约失败并修复授权项目的原字段。任务运行禁止使用 `--templates`。脚本仅检查结构、占位符与中文最低条件；评审仍须人工判断内容是否准确、充分，不能用一个汉字掩盖英文叙事。机器标识不翻译。
+
 ## 文件契约
 
 建议将运行文件放在项目 `.harness/`；兼容项目根目录：
 
 - `tasks.json`：唯一任务真相源；状态为 `pending`、`active`、`evidence_ready`、`passed`、`blocked`、`regressed`。
-- `evidence.jsonl`：追加 `{id, task, cmd, exit, tests, rev, ts}`，可增加 `encoding`、`artifacts`、`environment`。
+- `evidence.jsonl`：追加 `{id, task, summary, cmd, exit, tests, rev, ts}`；`summary` 是必需的中文结果摘要，`tests` 保留原始测试输出；可增加 `encoding`、`artifacts`、`environment`。
 - `reviews.jsonl`：追加 `{id, task, ev, reviewer_context, verdict, reason, ts}`。
-- `progress.txt`：追加式叙事日志，只读取最后一段恢复背景。
+- `progress.txt`：中文追加式叙事日志；每段含时间与任务 ID、进展、中文状态、验证/评审结论及下一步。命令和原始输出放代码围栏；只读取末段恢复背景，格式见模板。
 - `board/`：可视化看板是独立目录，不随技能安装；见下文「可视化看板」。
 
 ## 可视化看板（独立项目，不随技能安装）
+
+看板界面文案必须直接硬编码为中文，不做运行时翻译、不做双语界面、不读取 `board.i18n.json`，也不承担任务内容翻译。看板只读取任务文件已经写好的中文字段并进行展示、筛选、分组和状态可视化。缺少中文任务数据时应明确报错或标记契约失败，不能回退显示英文，也不为旧数据提供兼容翻译。数据不合规时显示契约错误及文件位置；修复原文件后刷新，不由看板改写任务。
+
 
 看板不在本技能包内，安装脚本也不会拷贝它。仓库独立目录 `board/` 提供只读 HTTP 页，轮询项目任务目录并自动刷新。
 

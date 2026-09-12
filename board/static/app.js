@@ -16,7 +16,8 @@ const means = {
   blocked:'卡住了（原因记在任务里，通常是环境缺失）',
   regressed:'曾经通过，但因依赖/接口变更失效，需要重做'
 };
-const fillOf = {pending:8,active:42,evidence_ready:78,passed:100,blocked:28,regressed:55};
+const stateSteps = ['pending','active','evidence_ready','passed'];
+let visibleRows = [], wantedId = null, loadDismissed = false, dialogTrigger = null;
 let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'list', eventFilter = 'both';
 let chain = Promise.resolve(), statusTimer = null;
 const timers = {
@@ -47,7 +48,7 @@ function parse(texts){
       try{
         const row = JSON.parse(line);
         if(!row || typeof row !== 'object' || Array.isArray(row)) throw Error();
-        return [row];
+        return [{...row, _sourceLine:i+1}];
       }catch{
         throw Error((name.startsWith('evidence') ? '证据' : '评审') + '文件第 ' + (i+1) + ' 行格式错误');
       }
@@ -61,25 +62,8 @@ function parseBoard(raw){
     return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null;
   }catch{ return null; }   // 地图是可选视图，坏了不影响任务队列
 }
-function install(texts, source){ model = parse(texts); render(); renderMap(); status(source + ' · ' + new Date().toLocaleTimeString('zh-CN')); }
+function install(texts, source){ const parsed = parse(texts); wantedId = visibleRows[selected]?.id || null; model = parsed; render(); status(source + ' · ' + new Date().toLocaleTimeString('zh-CN')); }
 
-/* 项目地图：回答"我现在站在哪 / 对不对 / 下一步做什么"。
-   数据来自可选的 .harness/board.json —— 缺了就不显示，不影响任务队列。 */
-function renderMap(){
-  const card = $('map-card'); if(!card) return;
-  const b = model.board;
-  if(!b || !(b.where || (b.next && b.next.length))){ card.hidden = true; return; }
-  card.hidden = false;
-  const where = $('map-where');
-  if(where) where.textContent = b.where || '';
-  const nextEl = $('map-next');
-  if(nextEl){
-    const next = b.next || [];
-    nextEl.innerHTML = next.length ? '<ul>' + next.map(n=>'<li><b>' + esc(n.task) + '</b> —— 为什么是它：' + esc(n.why || '未写')
-      + (n.see ? '<br><span class="src">做完你会看到：' + esc(n.see) + '</span>' : '') + '</li>').join('') + '</ul>'
-      : '';
-  }
-}
 function gate(t){
   if(t.status !== 'passed') return '';
   const r = model.reviews.filter(r=>r.task === t.id).at(-1);
@@ -98,9 +82,9 @@ function depMarkup(byId, deps){
   const done = deps.filter(d=>byId.get(d)?.status === 'passed').length;
   return '<span class="bar" title="依赖 ' + done + '/' + deps.length + ' 已通过"><i style="width:' + (done/deps.length*100) + '%"></i></span>';
 }
-function waveOf(t){ return t.wave || ('阶段 ' + (t.phase ?? '未分组')); }
+function waveOf(t){ return t.wave || (t.phase != null ? '阶段 ' + t.phase : '未分组'); }
 function setTab(tab){
-  const tabs = ['list','gantt','next','log'];
+  const tabs = ['list','trace','log'];
   mainTab = tabs.indexOf(tab) >= 0 ? tab : 'list';
   for(const id of tabs){
     const panel = $('tab-' + id);
@@ -110,78 +94,104 @@ function setTab(tab){
   }
 }
 function openEvents(){
+  dialogTrigger = document.activeElement;
   const d = $('events-drawer');
   if(d) d.hidden = false;
+  $('events-close')?.focus();
 }
 function closeEvents(){
   const d = $('events-drawer');
   if(d) d.hidden = true;
+  if(dialogTrigger?.isConnected) dialogTrigger.focus();
+}
+function groupedRows(rows){
+  const groups = new Map();
+  for(const row of rows){
+    const key = waveOf(row);
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  return groups;
+}
+function stageMarkup(t){
+  const index = stateSteps.indexOf(t.status);
+  return '<div class="stage-progress" role="img" aria-label="状态阶段：' + esc(labels[t.status]) + '，不代表完成百分比">'
+    + stateSteps.map((state,i)=>'<span class="' + (i === index ? 'current' : '') + '"><i></i>' + esc(labels[state]) + '</span>').join('')
+    + '</div>';
 }
 function renderCards(rows, byId){
   const tasksEl = $('tasks');
   if(!tasksEl) return;
-  tasksEl.innerHTML = rows.map((t,i)=>{
-    const tDeps = t.depends_on || [];
-    const depText = tDeps.map(d=>d + '/' + (byId.has(d) ? labels[byId.get(d).status] : '缺失')).join('、') || '无';
-    const g = gate(t);
-    const cell = g
-      ? (g.startsWith('门禁')
-          ? '<span class="flag warn" title="' + esc(g) + '">门禁缺口</span>'
-          : '<span class="flag" title="' + esc(g) + '">已关联</span>')
-      : '';
-    const title = t.desc || t.description || '';
-    return '<article class="tcard is-' + esc(t.status) + '" data-status="' + esc(t.status) + '" data-i="' + i + '" aria-selected="' + (i === selected) + '">'
-      + '<div class="row"><span class="id">' + esc(t.id) + '</span><span class="pri">P' + esc(t.priority ?? '—') + '</span></div>'
-      + '<div class="state"><i class="dot" style="background:' + colors[t.status] + '" aria-hidden="true"></i>' + labels[t.status] + '</div>'
-      + '<p class="desc" title="' + esc(title) + '">' + esc(title || '未填写') + '</p>'
-      + '<div class="meta">'
-      + (t.wave || t.phase != null ? '<span class="wave">' + esc(waveOf(t)) + '</span>' : '')
-      + '<span>依赖 ' + depMarkup(byId, tDeps) + ' ' + esc(depText === '无' ? '无' : tDeps.length + ' 项') + '</span>'
-      + '<span class="cmd mono" title="' + esc(t.verify || '') + '">' + esc(t.verify || '未填写') + '</span>'
-      + cell
-      + '</div></article>';
+  let i = 0;
+  tasksEl.innerHTML = [...groupedRows(rows)].map(([stage, items])=>{
+    const passed = items.filter(t=>t.status === 'passed').length;
+    return '<section class="task-group"><header class="group-head"><h2>' + esc(stage) + '</h2><span>' + passed + '/' + items.length + ' 已通过</span></header>'
+      + items.map(t=>{
+        const index = i++;
+        const deps = t.depends_on || [];
+        const evidence = model.evidence.filter(e=>!isMetaRow(e) && e.task === t.id);
+        const reviews = model.reviews.filter(r=>!isMetaRow(r) && r.task === t.id);
+        const e = evidence.at(-1), r = reviews.at(-1), g = gate(t);
+        return '<article class="tcard is-' + esc(t.status) + '" data-status="' + esc(t.status) + '" data-i="' + index + '" aria-selected="' + (index === selected) + '">'
+          + '<div class="row"><span class="id">' + esc(t.id) + '</span><span class="pri">优先级 ' + esc(t.priority ?? '—') + '</span></div>'
+          + '<div class="state"><i class="dot" style="background:' + colors[t.status] + '"></i>' + labels[t.status] + '</div>'
+          + '<button type="button" class="task-select" data-select-task="1">' + esc(t.name || t.desc || '未填写任务名称') + '</button>'
+          + '<p class="desc">' + esc(t.desc || '') + '</p>'
+          + '<p class="task-reason">当前原因：' + esc(t.reason || '未填写') + '</p>'
+          + '<p class="task-next">下一步：' + esc(t.next || '未填写') + '</p>'
+          + '<div class="meta"><span>依赖 ' + depMarkup(byId, deps) + ' ' + (deps.length || '无') + '</span>'
+          + (g ? '<span class="flag ' + (g.startsWith('门禁') ? 'warn' : '') + '">' + esc(g) + '</span>' : '') + '</div>'
+          + '<footer class="card-footer">' + stageMarkup(t)
+          + '<div class="card-audits"><button type="button" data-audit="e">证据 ' + evidence.length + '</button><span>' + esc(e?.summary || '暂无验证记录') + '</span>'
+          + '<button type="button" data-audit="r">评审 ' + reviews.length + '</button><span>' + esc(r?.reason || '待独立评审') + '</span></div></footer></article>';
+      }).join('') + '</section>';
   }).join('') || '<div class="empty">暂无匹配任务。按 L 选择项目任务目录，按 R 刷新。</div>';
 }
-function renderGantt(rows){
-  const keyEl = $('gantt-key');
-  if(keyEl){
-    keyEl.innerHTML = states.map(s=>'<span><i class="dot" style="background:' + colors[s] + '"></i>' + esc(labels[s]) + '</span>').join('')
-      + '<span>实心长条 = 已通过 · 短条 = 未完成</span>';
-  }
-  setText('gantt-count', rows.length + ' 条 · 按 Wave 分组，条长表示完成度');
-  const ganttEl = $('gantt');
-  if(!ganttEl) return;
-  if(!rows.length){
-    ganttEl.innerHTML = '<div class="empty">暂无匹配任务。按 L 选择项目任务目录，按 R 刷新。</div>';
-    return;
-  }
-  const groups = [];
-  const index = new Map();
-  rows.forEach((t,i)=>{
-    const key = waveOf(t);
-    if(!index.has(key)){ index.set(key, groups.length); groups.push({key, items:[]}); }
-    groups[index.get(key)].items.push([t,i]);
+function progressEntries(){
+  const entries = [];
+  let current = null;
+  let fence = false;
+  String(model.progress || '').split(/\r?\n/).forEach((line, i)=>{
+    if(line.trim().startsWith('```')) fence = !fence;
+    const match = !fence && line.match(/^##\s+([^|]+)\|\s*([^|]+)\|\s*(.+)$/);
+    if(match){
+      current = {ts:match[1].trim(), task:match[2].trim(), title:match[3].trim(), line:i+1, body:[]};
+      entries.push(current);
+    }else if(current){ current.body.push(line); }
   });
-  ganttEl.innerHTML = groups.map(g=>{
-    const passed = g.items.filter(x=>x[0].status === 'passed').length;
-    const pct = Math.round(passed / g.items.length * 100);
-    return '<section class="lane"><h3><b>' + esc(g.key) + '</b>'
-      + '<span class="lane-meter" title="' + passed + '/' + g.items.length + ' 已通过"><i style="width:' + pct + '%"></i></span>'
-      + '<span class="lane-stat">' + passed + '/' + g.items.length + ' 已通过</span></h3>'
-      + g.items.map(([t,i])=>{
-        const w = fillOf[t.status] ?? 20;
-        return '<div class="g-row" data-i="' + i + '" aria-selected="' + (i === selected) + '">'
-          + '<span class="id" title="' + esc(t.desc || t.id) + '">' + esc(t.id) + '</span>'
-          + '<span class="track" title="' + esc(labels[t.status]) + '"><i style="width:' + w + '%;background:' + colors[t.status] + '"></i></span>'
-          + '<span class="g-state"><i class="dot" style="background:' + colors[t.status] + '"></i>' + labels[t.status] + '</span>'
-          + '</div>';
-      }).join('')
-      + '</section>';
-  }).join('');
+  return entries;
+}
+function timeOrder(a,b){
+  const at = Date.parse(a.ts), bt = Date.parse(b.ts);
+  if(Number.isNaN(at) && Number.isNaN(bt)) return 0;
+  if(Number.isNaN(at)) return 1;
+  if(Number.isNaN(bt)) return -1;
+  return bt - at;
+}
+function renderTrajectory(current){
+  const box = $('trace'); if(!box) return;
+  if(!current){ box.innerHTML = '<p class="empty-note">请先在任务列表中选择任务</p>'; return; }
+  const rows = [
+    ...model.evidence.filter(x=>!isMetaRow(x) && x.task === current.id).map(x=>({...x, title:'验证记录', text:x.summary, source:'evidence.jsonl:' + x._sourceLine})),
+    ...model.reviews.filter(x=>!isMetaRow(x) && x.task === current.id).map(x=>({...x, title:'独立评审 · ' + (x.verdict === 'pass' ? '通过' : '未通过'), text:x.reason, source:'reviews.jsonl:' + x._sourceLine})),
+    ...progressEntries().filter(x=>x.task === current.id).map(x=>({...x, text:x.body.join('\n'), source:'progress.txt:' + x.line}))
+  ].sort(timeOrder);
+  box.innerHTML = '<header class="trace-head"><h2>' + esc(current.name || current.desc) + '</h2><span class="id">' + esc(current.id) + '</span><p>当前状态：' + labels[current.status] + ' · 仅展示已落盘记录，不推测历史状态</p></header>'
+    + (rows.length ? '<ol class="trace-list">' + rows.slice(0,120).map(x=>'<li><div><b>' + esc(x.title) + '</b><time>' + esc(Number.isNaN(Date.parse(x.ts)) ? '未提供有效时间' : fmtWhen(x.ts)) + '</time></div><pre>' + esc(x.text) + '</pre><small>' + esc(x.source) + (x.id ? ' · ' + esc(x.id) : '') + '</small></li>').join('') + '</ol>'
+      + (rows.length > 120 ? '<p>仅展示最近 120 条；完整记录请读取源文件。</p>' : '') : '<p class="empty-note">当前任务暂无轨迹记录</p>');
+}
+function renderProgress(){
+  const box = $('progress'); if(!box) return;
+  const entries = progressEntries().reverse();
+  box.innerHTML = entries.length ? entries.slice(0,80).map((x,i)=>{
+    const summary = x.body.find(line=>line.trim().startsWith('- 进展')) || '展开阅读本轮记录';
+    return '<details class="progress-entry"' + (i === 0 ? ' open' : '') + '><summary><span>' + esc(x.title) + ' · ' + esc(x.task) + '</span><time>' + esc(x.ts) + '</time><p>' + esc(summary) + '</p></summary><pre>' + esc(x.body.join('\n').trim()) + '</pre><small>progress.txt:' + x.line + '</small></details>';
+  }).join('') + (entries.length > 80 ? '<p>仅展示最近 80 段；完整记录请读取源文件。</p>' : '') : '<p class="empty-note">暂无分段进度；按技能模板追加任务编号与中文进展。</p>';
+  box.innerHTML += '<details class="raw-progress"><summary>查看进度原文</summary><pre>' + esc(model.progress || '暂无进度日志') + '</pre></details>';
 }
 function render(){
   try{ renderAll(); }
-  catch(e){ status('界面刷新失败：' + ((e && e.message) || e || '未矡错误'), true); }
+  catch(e){ status('界面刷新失败：' + ((e && e.message) || e || '未知错误'), true); }
 }
 function renderAll(){
   const all = model.tasks.tasks;
@@ -192,31 +202,7 @@ function renderAll(){
   const done = deps.filter(d=>byId.get(d)?.status === 'passed').length;
 
   setText('proj-name', model.tasks.project || '未命名项目');
-  setText('proj-rev', 'rev ' + (model.tasks.rev ?? '—'));
-  setText('hero-id', next ? next.id : '—');
-  setText('hero-desc', next ? (next.desc || next.description || '未填写描述')
-    : (all.length ? '没有可推进任务：依赖未满足或已全部完成' : '尚未编排任务'));
-  const hero = $('hero-card');
-  if(hero){
-    if(hero.classList && hero.classList.toggle) hero.classList.toggle('is-empty', !next);
-    if(hero.setAttribute) hero.setAttribute('data-status', next ? next.status : '');
-  }
-  const dep = $('hero-dep');
-  if(dep){
-    if(!next) dep.innerHTML = '<span>—</span>';
-    else {
-      const chain = deps.length
-        ? '<span class="ladder">' + deps.map(d=>'<i class="' + (byId.get(d)?.status === 'passed' ? 'on' : 'off') + '"></i>').join('') + '</span>'
-          + '<span>依赖 ' + done + '/' + deps.length + ' 已通过</span>'
-        : '<span>无前置依赖</span>';
-      dep.innerHTML = chain + '<span class="sep"></span><span>优先级 ' + esc(next.priority ?? '—') + '</span>';
-    }
-  }
-  heroCmd = next ? (next.verify || '') : '';
-  setText('hero-cmd', heroCmd || '未填写验证命令');
-  const copyBtn = $('copy');
-  if(copyBtn) copyBtn.disabled = !heroCmd;
-
+  setText('proj-rev', '修订 ' + (model.tasks.rev ?? '—'));
   setText('c-all', String(all.length));
   setText('c-eligible', String(ready.length));
   setText('c-active', String(counts.active));
@@ -246,7 +232,7 @@ function renderAll(){
   const searchEl = $('search');
   const q = ((searchEl && searchEl.value) || '').toLowerCase();
   const readyIds = new Set(ready.map(t=>t.id));
-  const rows = all.filter(t=>{
+  let rows = all.filter(t=>{
     if(filter === 'eligible' && !readyIds.has(t.id)) return false;
     if(filter !== 'all' && filter !== 'eligible' && t.status !== filter) return false;
     return JSON.stringify(t).toLowerCase().includes(q);
@@ -254,12 +240,14 @@ function renderAll(){
   rows.sort((a,b)=> sortBy === 'id' ? String(a.id).localeCompare(String(b.id))
     : sortBy === 'status' ? states.indexOf(a.status) - states.indexOf(b.status)
     : Number(a.priority ?? 999999) - Number(b.priority ?? 999999));
+  rows = [...groupedRows(rows).values()].flat();
+  if(wantedId){ const index = rows.findIndex(t=>t.id === wantedId); if(index >= 0) selected = index; wantedId = null; }
+  visibleRows = rows;
   if(selected >= rows.length) selected = Math.max(0, rows.length - 1);
   setText('count', rows.length + ' 条' + (filter === 'all' ? '' : ' · 已筛选') + ' · 第 ' + (rows.length ? selected + 1 : 0) + ' 张');
   setTab(mainTab);
 
   renderCards(rows, byId);
-  renderGantt(rows);
 
   const current = rows[selected];
   const detailEl = $('detail');
@@ -272,14 +260,17 @@ function renderAll(){
         + '<p>' + labels[current.status] + ' · 优先级 ' + esc(current.priority ?? '—') + '</p>'
         + '<p>' + esc(current.desc || current.description || '未填写') + '</p>'
         + '<p class="muted">依赖 ' + (tDeps.length ? esc(tDeps.join('、')) : '无') + '</p>'
-        + (current.reason ? '<p class="warn">阻塞原因：' + esc(typeof current.reason === 'string' ? current.reason : JSON.stringify(current.reason)) + '</p>' : '')
+        + (current.reason ? '<p class="warn">当前原因：' + esc(typeof current.reason === 'string' ? current.reason : JSON.stringify(current.reason)) + '</p>' : '')
         + '<p><code>' + esc(current.verify || '未填写验证') + '</code></p>'
         + '<p class="' + (g.startsWith('门禁') ? 'warn' : 'muted') + '">' + esc(g || '无门禁缺口') + '</p>';
     }
   }
 
-  renderEvents(rows[selected]);
-  setText('progress', model.progress || '暂无进度日志');
+  heroCmd = current?.verify || '';
+  if($('copy')) $('copy').disabled = !heroCmd;
+  renderEvents(current);
+  renderTrajectory(current);
+  renderProgress();
 }
 function isMetaRow(x){ return !x || x._comment || x.comment; }
 function asText(value){
@@ -302,35 +293,19 @@ function extrasOf(x, known){
     .map(k => kv(k, x[k])).join('');
 }
 function renderEvidenceCard(x){
-  const ok = x.exit === 0 || x.exit === '0';
-  const cls = ok ? 'ok' : (x.exit == null || x.exit === '' ? 'miss' : 'bad');
-  const known = new Set(['id','task','cmd','exit','tests','summary','rev','ts','encoding','PYTHONIOENCODING','artifacts','environment','kind']);
-  return '<article class="event is-e">'
-    + '<header><b>证据</b><span class="id">' + esc(x.id || '—') + '</span><span class="id">' + esc(x.task || '—') + '</span>'
-    + '<span class="badge ' + cls + '">退出码 ' + esc(x.exit ?? '未知') + '</span></header>'
-    + kv('命令', x.cmd)
-    + kv('测试摘要', x.tests || x.summary)
-    + kv('revision', x.rev)
-    + kv('编码', encodingOf(x))
-    + kv('产物', x.artifacts)
-    + kv('环境', x.environment)
-    + kv('时间', x.ts)
-    + extrasOf(x, known)
-    + '</article>';
+  const ok = x.exit === 0;
+  return '<article class="event is-e"><header><b>证据 · ' + (ok ? '命令成功' : '未成功验证') + '</b><span class="id">' + esc(x.id) + '</span></header>'
+    + '<p class="event-summary">' + esc(x.summary || '缺少中文摘要（契约失败）') + '</p>'
+    + '<small>' + esc(x.task) + ' · ' + esc(fmtWhen(x.ts) || '未提供时间') + '</small>'
+    + '<details><summary>查看验证细节</summary>' + kv('命令', x.cmd) + kv('退出码', x.exit)
+    + kv('原始测试输出', x.tests) + kv('修订标识', x.rev) + kv('编码', encodingOf(x))
+    + kv('产物', x.artifacts) + kv('环境', x.environment) + '</details></article>';
 }
 function renderReviewCard(x){
-  const cls = x.verdict === 'pass' ? 'ok' : (x.verdict === 'fail' ? 'bad' : 'miss');
-  const verdict = {pass:'通过', fail:'未通过'};
-  const known = new Set(['id','task','ev','reviewer_context','verdict','reason','note','ts','kind']);
-  return '<article class="event is-r">'
-    + '<header><b>评审</b><span class="id">' + esc(x.id || '—') + '</span><span class="id">' + esc(x.task || '—') + '</span>'
-    + '<span class="badge ' + cls + '">' + esc(verdict[x.verdict] || x.verdict || '未知') + '</span></header>'
-    + kv('理由', x.reason || x.note)
-    + kv('评审上下文', x.reviewer_context)
-    + kv('对应证据', x.ev)
-    + kv('时间', x.ts)
-    + extrasOf(x, known)
-    + '</article>';
+  return '<article class="event is-r"><header><b>独立评审 · ' + (x.verdict === 'pass' ? '通过' : x.verdict === 'fail' ? '未通过' : '结论未明确') + '</b><span class="id">' + esc(x.id) + '</span></header>'
+    + '<p class="event-summary">' + esc(x.reason || '缺少中文理由（契约失败）') + '</p>'
+    + '<small>' + esc(x.task) + ' · ' + esc(fmtWhen(x.ts) || '未提供时间') + '</small>'
+    + '<details><summary>查看评审依据</summary>' + kv('对应证据', x.ev) + kv('评审上下文', x.reviewer_context) + '</details></article>';
 }
 function renderEvents(current){
   const eventsEl = $('events');
@@ -361,39 +336,12 @@ function renderEvents(current){
   eventsEl.innerHTML = shown.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
     || '<p class="empty-note">' + empty + '</p>';
 }
-async function fetchOne(name){
-  const errs = []; let notFound = false;
-  for(const base of ['./','../']){
-    const rel = base + name;
-    try{
-      const r = await fetch(new URL(rel, location.href), {cache:'no-store'});
-      if(r.ok) return await r.text();
-      if(r.status === 404){ notFound = true; continue; }
-      errs.push(rel + ' → HTTP ' + r.status);
-    }catch(e){ errs.push(rel + ' → ' + ((e && e.message) || '读取异常')); }
-  }
-  if(!errs.length && notFound) return null;
-  throw Error(name + ' 读取失败（' + (errs.join('；') || '未找到') + '）');
-}
-async function fetchHarness(){
-  if(isLocalFile()) throw Error(localFileHint());
-  const texts = {};
-  const tasks = await fetchOne('tasks.json');
-  if(!tasks) return null;
-  texts['tasks.json'] = tasks;
-  for(const n of optional){
-    try{
-      const text = await fetchOne(n);
-      if(text !== null) texts[n] = text;
-    }catch(e){ /* 可选文件缺失或损坏不阻断看板 */ }
-  }
-  return texts;
-}
 function showEmpty(message){
+  lastStamp = '';
+  visibleRows = []; wantedId = null;
   model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:''};
   selected = 0;
   render();
-  renderMap();
   status(message);
 }
 function guarded(fn){
@@ -434,18 +382,23 @@ function noteLastSource(path){
   if(!selectedPath) setDirLabel('');
 }
 function loadDrawer(){ return $('load-drawer'); }
-function openLoad(){
+function openLoad(automatic=false){
+  if(automatic && loadDismissed) return;
+  if(!automatic) loadDismissed = false;
+  dialogTrigger = document.activeElement;
   const el = loadDrawer();
   if(!el) return;
   el.hidden = false;
   const input = $('load-path');
   if(input && !input.value) input.value = selectedPath || lastSource || '';
   const q = $('load-q');
-  if(q) setTimeout(()=>q.focus(), 0);
+  if(q) setTimeout(()=>{ if(!el.hidden) q.focus(); }, 0);
 }
 function closeLoad(){
+  loadDismissed = true;
   const el = loadDrawer();
   if(el) el.hidden = true;
+  if(dialogTrigger?.isConnected) dialogTrigger.focus();
 }
 function api(url, opts){
   return fetch(url, Object.assign({cache:'no-store'}, opts || {})).then(async r=>{
@@ -516,6 +469,19 @@ async function refreshSessions(){
   renderLoadList();
   return sessionCatalog;
 }
+function snapshotFiles(data){
+  const files = data?.files;
+  if(data?.contract?.errors?.length){
+    const message = '中文契约失败，请修复任务原文件：\n' + data.contract.errors.join('\n');
+    showEmpty('中文契约失败');
+    const box = $('contract-error'); if(box){ box.hidden = false; box.textContent = message; }
+    throw Error(message);
+  }
+  if(!files?.['tasks.json']) return null;
+  if(!data.contract || !Array.isArray(data.contract.errors)) throw Error('缺少中文契约检查结果，请使用配套服务启动看板');
+  const box = $('contract-error'); if(box){ box.hidden = true; box.textContent = ''; }
+  return files;
+}
 async function applySource(path, label){
   const target = String(path || '').trim();
   if(!target) throw Error('请指定项目根或 .harness 目录');
@@ -525,6 +491,8 @@ async function applySource(path, label){
     body: JSON.stringify({path: target})
   });
   rememberPath(data.source || target);
+  selected = 0; visibleRows = [];
+  snapshotFiles(data);
   if(data.files && data.files['tasks.json']){
     lastStamp = stampOf(data.files);
     install(data.files, (label || '已载入') + ' ' + (data.source || target));
@@ -556,16 +524,12 @@ async function loadProject(){ await guarded(async()=>{
 });}
 async function pullLive(){
   if(isLocalFile()) throw Error(localFileHint());
-  try{
-    const data = await api('/api/snapshot');
-    if(data && data.last_source) noteLastSource(data.last_source);
-    if(data && data.source) rememberPath(data.source);
-    if(data && data.files && data.files['tasks.json']) return data.files;
-    return null;
-  }catch(e){
-    return await fetchHarness();
-  }
+  const data = await api('/api/snapshot');
+  if(data.last_source) noteLastSource(data.last_source);
+  if(data.source) rememberPath(data.source);
+  return snapshotFiles(data);
 }
+
 function stampOf(texts){
   return ['tasks.json','evidence.jsonl','reviews.jsonl','progress.txt','board.json']
     .map(n => (texts && texts[n]) ? texts[n] : '').join('\u0001');
@@ -594,12 +558,13 @@ async function bootstrapSource(){
     const snap = await api('/api/snapshot');
     if(snap && snap.last_source) noteLastSource(snap.last_source);
     if(snap && snap.source) rememberPath(snap.source);
+    snapshotFiles(snap);
     if(snap && snap.files && snap.files['tasks.json']){
       lastStamp = stampOf(snap.files);
       install(snap.files, '已载入 ' + (snap.source || '任务目录'));
       return;
     }
-    openLoad();
+    openLoad(true);
     const catalog = await refreshSessions();
     const sug = catalog && catalog.suggested;
     if(sug && (sug.source || sug.cwd)){
@@ -609,7 +574,7 @@ async function bootstrapSource(){
     }
     status('选择 harness 目录或一条 Codex 会话');
   }catch(e){
-    openLoad();
+    openLoad(true);
     status('读取会话失败：' + ((e && e.message) || e), true);
   }
 }
@@ -686,7 +651,10 @@ function pickRow(e){
   const item = e.target && e.target.closest ? e.target.closest('[data-i]') : null;
   if(!item) return;
   selected = Number(item.dataset.i);
+  const audit = e.target.closest('[data-audit]');
+  if(audit) eventFilter = audit.dataset.audit;
   render();
+  if(audit) openEvents();
 }
 $('view-tabs').addEventListener('click', e=>{
   const b = e.target.closest ? e.target.closest('[data-tab]') : null;
@@ -694,9 +662,7 @@ $('view-tabs').addEventListener('click', e=>{
   setTab(b.dataset.tab);
 });
 $('tasks').addEventListener('click', pickRow);
-$('gantt').addEventListener('click', pickRow);
-const evOpen = $('events-open'), evClose = $('events-close'), evDrawer = $('events-drawer');
-if(evOpen) evOpen.addEventListener('click', openEvents);
+const evClose = $('events-close'), evDrawer = $('events-drawer');
 if(evClose) evClose.addEventListener('click', closeEvents);
 const evFilters = $('event-filters');
 if(evFilters) evFilters.addEventListener('click', e=>{
@@ -710,7 +676,16 @@ if(evDrawer) evDrawer.addEventListener('click', e=>{
   if(t && t.getAttribute && t.getAttribute('data-close-drawer')) closeEvents();
 });
 document.addEventListener('keydown', e=>{
-  if(e.key === 'Escape'){ closeEvents(); closeLoad(); }
+  if(e.key === 'Escape'){ closeEvents(); closeLoad(); return; }
+  if(e.key === 'Tab'){
+    const drawer = !$('load-drawer')?.hidden ? $('load-drawer') : !$('events-drawer')?.hidden ? $('events-drawer') : null;
+    if(drawer){
+      const focusable = [...drawer.querySelectorAll('button:not(:disabled),input:not(:disabled),select,summary,[tabindex="0"]')];
+      const first = focusable[0], last = focusable.at(-1);
+      if(first && e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+      else if(last && !e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+    }
+  }
   if(e.target && e.target.matches && e.target.matches('input,select,textarea')) return;
   if(e.ctrlKey || e.metaKey || e.altKey) return;
   if(e.key === 'l' || e.key === 'L'){ e.preventDefault(); loadProject(); }

@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +24,8 @@ def write_session(path: Path, cwd: str, sid: str, ts: str):
         json.dumps({"timestamp": ts, "type": "session_meta", "payload": payload}, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    modified = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    os.utime(path, (modified, modified))
 
 
 class SessionCatalogTests(unittest.TestCase):

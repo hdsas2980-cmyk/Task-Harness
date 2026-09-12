@@ -20,6 +20,8 @@ trap cleanup EXIT
 mkdir -p "$STAGE"
 cp "$REPO_DIR/SKILL.md" "$STAGE/"
 cp -R "$REPO_DIR/references" "$STAGE/"
+mkdir -p "$STAGE/scripts"
+cp "$REPO_DIR/scripts/check_task_harness_language.py" "$STAGE/scripts/"
 find "$STAGE" -type d -name "__pycache__" -prune -exec rm -rf {} +
 mv "$STAGE" "$TARGET"
 trap - EXIT

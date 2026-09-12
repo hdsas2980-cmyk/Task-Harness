@@ -1,13 +1,16 @@
 {
   "project": "{{项目名称}}",
-  "description": "{{一句话目标与范围}}",
+  "description": "{{用中文写一句话目标与范围}}",
   "rev": 1,
   "methodology": "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents",
   "tasks": [
     {
       "id": "t-01",
       "priority": 1,
-      "desc": "第一个任务的一句话描述",
+      "name": "第一个任务名称",
+      "desc": "用中文写第一个任务的一句话描述",
+      "reason": "暂无阻塞；如有阻塞必须用中文说明原因",
+      "next": "用中文写当前下一项行动",
       "depends_on": [],
       "verify": "可执行的验证命令，例如 go test ./... 或 npm test -- x.test.ts",
       "status": "pending"
@@ -15,7 +18,10 @@
     {
       "id": "t-02",
       "priority": 2,
-      "desc": "第二个任务的一句话描述",
+      "name": "第二个任务名称",
+      "desc": "用中文写第二个任务的一句话描述",
+      "reason": "暂无阻塞；如有阻塞必须用中文说明原因",
+      "next": "用中文写当前下一项行动",
       "depends_on": ["t-01"],
       "verify": "可执行的验证命令",
       "status": "pending"
@@ -23,16 +29,19 @@
     {
       "id": "bundle-user-api",
       "priority": 3,
-      "desc": "用户 API 实现与测试（原子束）",
+      "name": "用户接口实现与测试",
+      "desc": "用中文写用户接口实现与测试目标（原子束）",
+      "reason": "暂无阻塞；如有阻塞必须用中文说明原因",
+      "next": "用中文写原子束当前下一项行动",
       "bundle": [
         {
           "id": "t-backend-03",
-          "desc": "实现 GET /api/users 后端接口",
+          "desc": "实现用户查询后端接口（GET /api/users）",
           "verify": "curl http://localhost:3000/api/users"
         },
         {
           "id": "t-test-03",
-          "desc": "补充用户 API 集成测试",
+          "desc": "补充用户接口集成测试",
           "verify": "npm test -- user-api.test.ts"
         }
       ],
@@ -44,16 +53,19 @@
     {
       "id": "bundle-order-api",
       "priority": 3,
-      "desc": "订单 API 实现与测试（原子束）",
+      "name": "订单接口实现与测试",
+      "desc": "用中文写订单接口实现与测试目标（原子束）",
+      "reason": "暂无阻塞；如有阻塞必须用中文说明原因",
+      "next": "用中文写原子束当前下一项行动",
       "bundle": [
         {
           "id": "t-backend-04",
-          "desc": "实现 POST /api/orders 后端接口",
+          "desc": "实现订单提交后端接口（POST /api/orders）",
           "verify": "curl -X POST http://localhost:3000/api/orders"
         },
         {
           "id": "t-test-04",
-          "desc": "补充订单 API 集成测试",
+          "desc": "补充订单接口集成测试",
           "verify": "npm test -- order-api.test.ts"
         }
       ],

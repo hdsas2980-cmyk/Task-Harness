@@ -1,1 +1,1 @@
-{"_comment": "追加日志：每次独立评审追加一行，删除本注释行后使用。示例 → {\"id\":\"rv-01\",\"task\":\"t-01\",\"ev\":\"ev-01\",\"reviewer_context\":\"codex-independent-task\",\"verdict\":\"pass\",\"reason\":\"范围、验证和回归检查均通过\",\"ts\":\"2026-08-31T12:05:00+08:00\"}"}
+{"_comment": "尚无真实评审记录。独立评审后追加中文 reason；verdict 使用 pass 或 fail，评审上下文标识保持原文。"}

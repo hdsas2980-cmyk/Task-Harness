@@ -477,6 +477,32 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
 .event .badge.ok{color:var(--st-passed);border-color:color-mix(in oklch,var(--st-passed) 45%,var(--line))}
 .event .badge.bad{color:var(--st-blocked);border-color:color-mix(in oklch,var(--st-blocked) 45%,var(--line))}
 .event .badge.miss{color:var(--faint)}
+
+/* 原字段中文视图：卡片内状态阶段与审计入口，所有抽屉可独立关闭。 */
+[hidden]{display:none !important}
+.cards{display:block;overflow:auto}
+.task-group{margin-bottom:20px}
+.group-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 0;margin-bottom:8px}
+.group-head h2{font-size:14px;margin:0}.group-head span{font-size:12px;color:var(--muted)}
+.tcard{margin-bottom:8px}.task-select{border:0;background:none;text-align:left;padding:0;font-weight:600;font-size:14px;color:var(--ink);cursor:pointer}
+.task-reason,.task-next{margin:5px 0;font-size:12px;color:var(--muted)}
+.card-footer{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+.stage-progress{display:flex;gap:5px;margin-bottom:10px}.stage-progress span{flex:1;font-size:11px;color:var(--muted)}
+.stage-progress i{display:block;height:4px;background:var(--line);margin-bottom:4px;border-radius:2px}
+.stage-progress .current{color:var(--ink);font-weight:600}.stage-progress .current i{background:var(--accent)}
+.card-audits{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;font-size:12px}
+.card-audits button{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:4px 10px;cursor:pointer;color:var(--ink)}
+.card-audits span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+#trace,#progress{overflow:auto;padding:16px;min-height:0}.trace-head h2{margin:0;font-size:16px}.trace-head p{color:var(--muted);font-size:12px}
+.trace-list{list-style:none;padding:0 0 0 14px;border-left:2px solid var(--line)}.trace-list li{padding:12px 0;border-bottom:1px solid var(--line)}
+.trace-list li>div{display:flex;justify-content:space-between;gap:8px}.trace-list time,small{font-size:11px;color:var(--muted)}
+.trace-list pre,.progress-entry pre,.raw-progress pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 var(--sans)}
+.progress-entry{border-bottom:1px solid var(--line);padding:12px 0}.progress-entry summary{cursor:pointer}.progress-entry summary span{font-weight:600}.progress-entry time{margin-left:12px;font-size:11px;color:var(--muted)}
+.progress-entry summary p{margin:6px 0;font-size:12px;color:var(--muted)}.raw-progress{margin-top:16px}
+.event-summary{font-size:14px;line-height:1.6}.event details{margin-top:12px}.event details summary{cursor:pointer;color:var(--muted);font-size:12px;margin-bottom:8px}
+#contract-error{white-space:pre-wrap;overflow:auto;max-height:35vh;padding:12px;border:1px solid var(--line);color:var(--danger,var(--ink));background:var(--surface);font:12px/1.6 var(--sans)}
+button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
 </style>
 </head>
 <body>
@@ -495,7 +521,7 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
     </nav>
     <section class="rail-detail" aria-label="当前行">
       <h2>当前行</h2>
-      <div class="detail" id="detail"></div>
+      <div class="detail" id="detail"></div><button class="btn" id="copy" type="button">复制当前验证命令</button>
     </section>
     <div class="keys">
       <h2>键盘</h2>
@@ -506,22 +532,22 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
   </aside>
 
   <header class="top">
-    <div class="path"><b id="proj-name">—</b><span id="proj-rev">rev —</span></div>
+    <div class="path"><b id="proj-name">—</b><span id="proj-rev">修订 —</span></div>
     <div class="grow"></div>
     <label class="search-wrap">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.2"/><path d="M20 20l-3.7-3.7"/></svg>
       <input class="search" id="search" type="search" aria-label="搜索任务" placeholder="搜索编号、描述、验证命令">
     </label>
-    <button class="btn" id="events-open" type="button">证据与评审</button>
+
     <button class="btn btn-solid" id="load" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 20h15"/></svg>载入任务 <kbd>L</kbd></button>
     <button class="btn" id="refresh" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1M20.5 4.2v5h-5"/></svg>刷新任务 <kbd>R</kbd></button>
   </header>
 
   <main class="main">
+    <pre id="contract-error" role="alert" hidden></pre>
     <div class="tabs" id="view-tabs" role="tablist" aria-label="任务视图切换">
       <button type="button" role="tab" id="tab-btn-list" data-tab="list" aria-controls="tab-list" aria-selected="true">任务列表</button>
-      <button type="button" role="tab" id="tab-btn-next" data-tab="next" aria-controls="tab-next" aria-selected="false">下一步看板</button>
-      <button type="button" role="tab" id="tab-btn-gantt" data-tab="gantt" aria-controls="tab-gantt" aria-selected="false">进度时间线</button>
+      <button type="button" role="tab" id="tab-btn-trace" data-tab="trace" aria-controls="tab-trace" aria-selected="false">任务轨迹</button>
       <button type="button" role="tab" id="tab-btn-log" data-tab="log" aria-controls="tab-log" aria-selected="false">进度日志</button>
     </div>
 
@@ -541,40 +567,13 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
       <div class="cards" id="tasks"></div>
     </section>
 
-    <section class="panel" id="tab-gantt" role="tabpanel" aria-labelledby="tab-btn-gantt" hidden>
-      <div class="gantt-head">
-        <div class="gantt-key" id="gantt-key"></div>
-        <span class="grow"></span>
-        <span class="hint" id="gantt-count"></span>
-      </div>
-      <div class="gantt" id="gantt"></div>
-    </section>
-
-    <section class="panel next-panel" id="tab-next" role="tabpanel" aria-labelledby="tab-btn-next" hidden>
-      <section class="hero is-empty" id="hero-card" aria-label="下一步看板">
-        <p class="hero-label">下一步看板</p>
-        <div class="hero-line">
-          <span class="hero-id" id="hero-id">—</span>
-          <span class="hero-desc" id="hero-desc">尚未编排任务</span>
-        </div>
-        <div class="hero-meta" id="hero-dep">—</div>
-        <div class="hero-run">
-          <span class="run-label">验证命令</span>
-          <code class="run-cmd" id="hero-cmd">—</code>
-          <button id="copy" class="btn-icon" type="button" aria-label="复制验证命令" title="复制验证命令">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.2"/><path d="M15.5 8.5V6a2.2 2.2 0 0 0-2.2-2.2H6A2.2 2.2 0 0 0 3.8 6v7.3A2.2 2.2 0 0 0 6 15.5h2.5"/></svg>
-          </button>
-        </div>
-        <div class="next-extra" id="map-card" hidden>
-          <p class="where" id="map-where"></p>
-          <div id="map-next"></div>
-        </div>
-      </section>
+    <section class="panel" id="tab-trace" role="tabpanel" aria-labelledby="tab-btn-trace" hidden>
+      <div id="trace"></div>
     </section>
 
     <section class="panel log-panel" id="tab-log" role="tabpanel" aria-labelledby="tab-btn-log" hidden>
       <div class="log-head"><h2>进度日志</h2></div>
-      <pre id="progress"></pre>
+      <div id="progress"></div>
     </section>
   </main>
 
@@ -609,13 +608,13 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
     <div class="load-head">
       <div>
         <h2 id="load-title">载入任务</h2>
-        <p>指定 harness 目录，或从本机 Codex 会话选择工作目录。</p>
+        <p>指定任务文件目录，或从本机 Codex 会话选择工作目录。</p>
       </div>
       <button class="btn-icon" id="load-close" type="button" aria-label="关闭">×</button>
     </div>
     <div class="load-body">
       <section class="load-sec">
-        <h3>1 指定 harness 目录</h3>
+        <h3>1 指定任务文件目录</h3>
         <div class="path-row">
           <input id="load-path" type="text" spellcheck="false" placeholder="项目根或 .harness 的绝对路径">
           <button class="btn" id="load-browse" type="button">浏览</button>

@@ -176,6 +176,30 @@ class BoardServeTests(unittest.TestCase):
             httpd.server_close()
 
 
+    def test_snapshot_reports_language_failure_without_rewriting_source(self):
+        original = self.tasks.read_bytes()
+        _, body = fetch(self.base + "/api/snapshot")
+        result = json.loads(body.decode("utf-8"))
+        self.assertIn("contract", result)
+        self.assertTrue(result["contract"]["errors"])
+        self.assertIn("description", "\n".join(result["contract"]["errors"]))
+        self.assertEqual(self.tasks.read_bytes(), original)
+
+    def test_native_chinese_snapshot_uses_shared_checker(self):
+        source = self.tasks.parent
+        self.tasks.write_text(json.dumps({"project":"测试项目", "description":"验证只读看板", "tasks":[
+            {"id":"a", "name":"实现任务", "desc":"实现验证", "reason":"暂无阻塞", "next":"执行验证", "status":"active"}
+        ]}, ensure_ascii=False), encoding="utf-8")
+        for filename in ("evidence.jsonl", "reviews.jsonl"):
+            (source / filename).write_text("", encoding="utf-8")
+        (source / "progress.txt").write_text("## 2026-09-12 | a | 执行\n- 进展：已开始实现\n", encoding="utf-8")
+        _, body = fetch(self.base + "/api/snapshot")
+        result = json.loads(body.decode("utf-8"))
+        self.assertEqual(result["contract"]["errors"], [])
+        (source / "board.i18n.json").write_text("{}", encoding="utf-8")
+        _, body = fetch(self.base + "/api/snapshot")
+        self.assertIn("board.i18n.json", str(json.loads(body.decode("utf-8"))["contract"]["errors"]))
+
     def test_switch_remembers_last_source(self):
         status, body = fetch(self.base + "/api/source", {"path": str(self.other)})
         self.assertEqual(status, 200)

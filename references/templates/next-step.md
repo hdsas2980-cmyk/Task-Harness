@@ -6,14 +6,16 @@
 
 你在一个 Codex 工作轮次中，只推进一个 Harness 任务。先做：
 
+遵守 `references/language-contract.md`：原字段中文、机器标识不变、无旁挂翻译。用当前技能绝对路径运行 `scripts/check_task_harness_language.py <项目绝对路径>`，禁止 `--templates`；开始推进前、证据与进度追加后、评审回写后均须通过。失败只修复源文件，不推进状态。
+
 1. 读取项目 `.harness/tasks.json`（或根目录 `tasks.json`）与 `progress.txt` 末段，保持项目工作目录；不要为了看板去跑技能脚本；
 2. 只选择一个依赖已满足、优先级最高的 `pending` 或 `regressed` 任务（或束）；
 3. 读取该任务（或束内任务）、必要依赖结论、任务声明路径和必要代码，不读取全量旧日志；
 4. 将该任务置为 `active`，按 ponytail 阶梯选择最小实现；
 5. 若是束，按 `bundle` 数组顺序串行推进每个任务；若是单任务，直接推进；
-6. 运行任务的 `verify`（束的 `verify` 是整束验证），把可重放命令、退出码、测试摘要、revision、时间和 artifact 路径追加到 `evidence.jsonl`；
-7. 把任务置为 `evidence_ready`，不要在本轮直接置 `passed`；
-8. 追加 `progress.txt`，最后输出恰好一个状态块：
+6. 运行任务的 `verify`（束的 `verify` 是整束验证），把可重放命令、退出码、中文结果摘要 `summary`、原始测试输出 `tests`、revision、时间和 artifact 路径追加到 `evidence.jsonl`；
+7. 更新任务中文 `reason`、`next`，追加中文 `progress.txt`；运行中文契约检查，通过后才置为 `evidence_ready`，失败不推进；不要在本轮直接置 `passed`；
+8. 最后输出恰好一个状态块：
 
 ```text
 HARNESS_STATUS: <task-id> <IN_PROGRESS|COMPLETE|BLOCKED>
@@ -27,17 +29,17 @@ EXIT_SIGNAL: <false|true>
 
 评审者必须：
 
-- 只读必要材料；
+- 只读必要材料，并独立执行中文契约检查、人工核对说明实质意义；
 - 检查 CRITICAL、安全、范围、测试、状态完整性和可恢复性；
 - 不执行未授权的破坏性动作；
 - 不把实现者未落盘的解释当证据；
 - 最后只输出恰好一行：
 
 ```text
-HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
+HARNESS_REVIEW: pass|fail | <task-id> | <中文理由>
 ```
 
-主任务收到 `pass` 后，追加 `reviews.jsonl` 并将状态改为 `passed`；收到 `fail` 后，追加失败 review，将状态改回 `active` 并带新证据重试。独立上下文不可用时，记录 `blocked`，不要伪造 review。
+主任务先追加含中文理由的 `reviews.jsonl`，更新任务中文 `reason`、`next` 和进度；运行中文契约检查，通过后才根据评审结论更新状态：`pass` 改为 `passed`，`fail` 改回 `active` 并带新证据重试。检查失败则保留原状态，不先推进再补检查。独立上下文不可用时，记录 `blocked`，不要伪造 review。
 
 ## C. 多会话异步派卡（领袖/编排会话）
 

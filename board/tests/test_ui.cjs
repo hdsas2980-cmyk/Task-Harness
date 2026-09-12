@@ -11,7 +11,7 @@ assert.match(html, /刷新任务/);
 assert.match(html, /\.\/app\.js/);
 assert.match(html, /load-drawer/);
 assert.match(html, /data-filter="all"[\s\S]*data-filter="blocked"/);
-assert.match(html, /id="tab-btn-list"[\s\S]*id="tab-btn-next"/);
+assert.match(html, /id="tab-btn-list"[\s\S]*id="tab-btn-trace"/);
 assert.match(code, /mainTab = 'list'/);
 assert.match(code, /data-status=/);
 assert.match(code, /renderEvidenceCard/);
@@ -87,7 +87,14 @@ function run(extras){
     assert.equal(button.getAttribute('aria-current'), 'true');
     for (const other of eventButtons.filter(b => b !== button)) assert.equal(other.getAttribute('aria-current'), 'false');
   }
-  return {scope, node:n, store, nodes, fetches, fire, key, pick, eventKind};
+  function openAudit(index = 0) {
+    fire('tasks', 'click', {target:{closest(selector){
+      if(selector === '[data-i]') return {dataset:{i:String(index)}};
+      if(selector === '[data-audit]') return {dataset:{audit:'both'}};
+      return null;
+    }}});
+  }
+  return {scope, node:n, store, nodes, fetches, fire, key, pick, eventKind, openAudit};
 }
 
 (async()=>{
@@ -119,7 +126,7 @@ function run(extras){
       })};
     }
     if(u.includes('/api/source')){
-      return {ok:true, status:200, text:async()=>JSON.stringify({source:'E:/proj/.harness', files:{'tasks.json':JSON.stringify({project:'演示',tasks:[{id:'picked-1',status:'blocked',priority:1,desc:'from session'}]})}})};
+      return {ok:true, status:200, text:async()=>JSON.stringify({source:'E:/proj/.harness', contract:{errors:[]}, files:{'tasks.json':JSON.stringify({project:'演示',tasks:[{id:'picked-1',status:'blocked',priority:1,desc:'from session'}]})}})};
     }
     return {ok:false, status:404, text:async()=>'{}'};
   };
@@ -208,14 +215,14 @@ function run(extras){
     assert.equal(content.includes('review-' + task + '-only'), kind !== 'e');
   }
   installLinked();
-  linked.fire('events-open', 'click');
+  linked.openAudit(vm.runInContext('selected', linked.scope));
   assert.equal(linked.node('events-drawer').hidden, false);
   expectCurrent('A');
   linked.pick(1);
   expectCurrent('B');
   linked.key('ArrowUp');
   expectCurrent('A');
-  linked.pick(1, 'gantt');
+  linked.pick(1);
   expectCurrent('B');
   linked.eventKind('e');
   expectCurrent('B', 'e');
@@ -254,12 +261,65 @@ function run(extras){
   assert.match(linked.node('events').innerHTML, /fresh-B-only/);
   linked.fire('events-close', 'click');
   assert.equal(linked.node('events-drawer').hidden, true);
-  linked.fire('events-open', 'click');
+  linked.openAudit(vm.runInContext('selected', linked.scope));
   expectCurrent('B');
   const otherProject = {'tasks.json':JSON.stringify({tasks:[{id:'task-B', status:'active', desc:'新项目同编号任务'}]})};
   installLinked(otherProject);
   assert.match(linked.node('events').innerHTML, /当前任务暂无证据或评审/);
   assert.doesNotMatch(linked.node('events').innerHTML, /verify-B-only|fresh-B-only/);
 
+  assert.doesNotMatch(html, /id="tab-btn-(?:next|gantt)"|id="events-open"|id="trace-select"/);
+  assert.doesNotMatch(code, /name_zh|desc_zh|summary_zh|reason_zh|parseI18n|translated\(/);
+  assert.match(html, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+  const native = run({});
+  const nativeTexts = {
+    'tasks.json': JSON.stringify({project:'中文项目', description:'中文目标', tasks:[
+      {id:'A', name:'实现甲', desc:'完成甲', reason:'暂无阻塞', next:'运行验证', status:'active', wave:'第一阶段', priority:1},
+      {id:'B', name:'实现乙', desc:'完成乙', reason:'等待环境', next:'准备环境', status:'blocked', wave:'第二阶段', priority:2}
+    ]}),
+    'evidence.jsonl': JSON.stringify({id:'ev-A',task:'A',summary:'十二项测试通过',tests:'12 passed',cmd:'pytest -q',exit:0,ts:'2026-09-12T10:00:00Z'}),
+    'reviews.jsonl': JSON.stringify({id:'rv-B',task:'B',reason:'环境不齐，尚不能通过',verdict:'fail',ts:'2026-09-12T10:05:00Z'}),
+    'progress.txt':'## 2026-09-12T09:00:00Z | A | 执行\n- 进展：甲已开始\n## 2026-09-12T09:30:00Z | B | 执行\n- 进展：乙被阻塞\n'
+  };
+  vm.runInContext(`install(${JSON.stringify(nativeTexts)}, "中文联动")`, native.scope);
+  assert.match(native.node('tasks').innerHTML, /第一阶段[\s\S]*第二阶段/);
+  assert.match(native.node('tasks').innerHTML, /阶段进度|状态阶段/);
+  assert.match(native.node('tasks').innerHTML, /data-audit="e"/);
+  assert.match(native.node('tasks').innerHTML, /十二项测试通过/);
+  vm.runInContext("setTab('trace')", native.scope);
+  assert.match(native.node('trace').innerHTML, /甲已开始|十二项测试通过/);
+  assert.doesNotMatch(native.node('trace').innerHTML, /乙被阻塞|环境不齐/);
+  assert.match(native.node('trace').innerHTML, /evidence\.jsonl:1/);
+  assert.equal(vm.runInContext('parse({"tasks.json":JSON.stringify({tasks:[]}),"evidence.jsonl":"\\n"+JSON.stringify({id:"ev",_sourceLine:99})}).evidence[0]._sourceLine',native.scope), 2, '来源行号取物理行，不能信任记录自带值');
+  assert.doesNotMatch(native.node('trace').innerHTML, /undefined/);
+  native.pick(1);
+  assert.match(native.node('trace').innerHTML, /乙被阻塞|环境不齐/);
+  assert.doesNotMatch(native.node('trace').innerHTML, /甲已开始|十二项测试通过/);
+  assert.match(native.node('trace').innerHTML, /reviews\.jsonl:1/);
+  native.openAudit(0);
+  assert.equal(native.node('events-drawer').hidden, false);
+  assert.match(native.node('events').innerHTML, /十二项测试通过[\s\S]*<details[\s\S]*12 passed/);
+  native.key('Escape');
+  assert.equal(native.node('events-drawer').hidden, true);
+  vm.runInContext('openLoad()', native.scope);
+  native.key('Escape');
+  assert.equal(native.node('load-drawer').hidden, true);
+  native.node('load-close').onclick();
+  assert.equal(native.node('load-drawer').hidden, true);
+  assert.match(native.node('progress').innerHTML, /<details/);
+  vm.runInContext("lastStamp = 'previous valid snapshot'", native.scope);
+  assert.throws(()=>vm.runInContext('snapshotFiles({files:{"tasks.json":"{}"},contract:{errors:["tasks.json.description：必须中文"]}})',native.scope), /必须中文/);
+  assert.equal(vm.runInContext('lastStamp', native.scope), '', '修复回原内容也必须触发重新渲染');
+  assert.throws(()=>vm.runInContext('snapshotFiles({files:{"tasks.json":"{}"}})',native.scope), /契约/);
+  const invalidBoot = run({location:{protocol:'http:',href:'http://127.0.0.1:8765/'}, fetch:async()=>({ok:true,status:200,text:async()=>JSON.stringify({
+    source:'E:/invalid',files:{'tasks.json':JSON.stringify({tasks:[{id:'english-task',status:'active',desc:'English only'}]})},
+    contract:{errors:['tasks.json.description：必须中文']}
+  })})});
+  vm.runInContext('install = function(){ calls.push("unexpected install"); }', invalidBoot.scope);
+  await new Promise(r=>setTimeout(r,20));
+  assert.equal(invalidBoot.scope.calls.length, 0, '启动不能先渲染不合格数据再隐藏');
+  assert.doesNotMatch(invalidBoot.node('tasks').innerHTML, /English only|english-task/);
+  assert.equal(invalidBoot.node('contract-error').hidden, false);
+  assert.match(invalidBoot.node('contract-error').textContent, /必须中文/);
   console.log('UI logic: assertions passed (mock DOM; not browser visual verification)');
 })().catch(e=>{console.error(e);process.exitCode=1;});

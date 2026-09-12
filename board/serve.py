@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import posixpath
@@ -20,6 +21,14 @@ if str(HERE) not in sys.path:
 
 from pick_dir import pick_directory_subprocess  # noqa: E402
 from sessions import list_session_catalog, resolve_source  # noqa: E402
+
+# 源码与独立发布包都携带同一技能校验器，不维护第二份语言规则。
+CHECKER = (HERE / "scripts/check_task_harness_language.py")
+if not CHECKER.is_file():
+    CHECKER = HERE.parent / "scripts/check_task_harness_language.py"
+_checker_spec = importlib.util.spec_from_file_location("task_harness_language", CHECKER)
+_language = importlib.util.module_from_spec(_checker_spec)
+_checker_spec.loader.exec_module(_language)
 
 STATIC = HERE / "static"
 OPTIONAL = ("evidence.jsonl", "reviews.jsonl", "progress.txt", "board.json")
@@ -77,17 +86,29 @@ def save_last_source(source: Path) -> None:
 
 def snapshot(source: Path | None) -> dict:
     files = {}
+    read_errors = []
     if source is not None:
-        tasks = source / "tasks.json"
-        if tasks.is_file():
-            files["tasks.json"] = tasks.read_text(encoding="utf-8-sig")
-        for name in OPTIONAL:
+        for name in ("tasks.json", *OPTIONAL):
             fp = source / name
             if fp.is_file():
-                files[name] = fp.read_text(encoding="utf-8-sig")
+                try:
+                    files[name] = fp.read_text(encoding="utf-8-sig")
+                except (OSError, UnicodeError) as exc:
+                    read_errors.append(f"{name}：无法读取 UTF-8 文件（{exc}）")
+    checked_files = dict(files)
+    # 只检测禁用文件是否存在，绝不读取翻译内容。
+    if source is not None and (source / "board.i18n.json").exists():
+        checked_files["board.i18n.json"] = ""
+    try:
+        contract = _language.validate_files(checked_files) if source is not None else None
+    except RecursionError:
+        contract = {"errors": ["任务文件嵌套过深，无法检查"], "counts": {}}
+    if contract is not None:
+        contract["errors"] = read_errors + contract["errors"]
     return {
         "source": str(source) if source is not None else None,
         "files": files,
+        "contract": contract,
         "last_source": load_last_source(),
     }
 

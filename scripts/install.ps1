@@ -20,6 +20,9 @@ try {
   New-Item -ItemType Directory -Force -Path $Stage | Out-Null
   Copy-Item -LiteralPath (Join-Path $RepoDir 'SKILL.md') -Destination $Stage
   Copy-Item -LiteralPath (Join-Path $RepoDir 'references') -Destination $Stage -Recurse
+  $RuntimeScripts = Join-Path $Stage 'scripts'
+  New-Item -ItemType Directory -Force -Path $RuntimeScripts | Out-Null
+  Copy-Item -LiteralPath (Join-Path $RepoDir 'scripts/check_task_harness_language.py') -Destination $RuntimeScripts
   Get-ChildItem -LiteralPath $Stage -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
   Move-Item -LiteralPath $Stage -Destination $Target
   Write-Host "[OK] Codex Skill -> $Target"
