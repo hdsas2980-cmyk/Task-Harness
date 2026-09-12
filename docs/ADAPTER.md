@@ -32,7 +32,7 @@ git checkout -b <host>
 - 默认只安装到一个宿主根目录。
 - 禁止顺手写入其他 ADE（例如 TRAE 安装器不要默认写 `~/.claude`）。
 - 覆盖前做时间戳备份。
-- 安装 `SKILL.md` + `references/`；`commands/` 与 `agents/` 仅当宿主确实读取这些目录。
+- 安装 `SKILL.md` + `references/` 及技能执行必需的运行时脚本；例如 `codex` 必须携带 `scripts/check_task_harness_language.py`。不要安装开发测试和看板；`commands/` 与 `agents/` 仅当宿主确实读取这些目录。
 - 在 README 写明绝对路径或可覆盖的环境变量（如 `CODEX_HOME`、`DSH_HOME`）。
 
 ## 4. README 最低内容

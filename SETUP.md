@@ -8,7 +8,7 @@
 
 ```powershell
 git --version
-python --version
+python --version  # 需要 Python 3.10+
 ```
 
 不需要为了 Harness 安装 gstack、MCP、Claude Code 或额外运行时。项目已有测试工具优先。
@@ -26,13 +26,24 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 安装行为：
 
 1. 既有 Codex `task-harness` 目录先移动到 `%CODEX_HOME%\skill-backups\` 的时间戳目录；
-2. 使用 staging 目录复制 `SKILL.md` 和 `references/`，完成后原子移动到目标；
-3. 不安装 `commands/`；
+2. 使用 staging 目录复制 `SKILL.md`、`references/` 和 `scripts/check_task_harness_language.py`，完成后移动到目标；
+3. 不安装 `commands/`、`board/`、开发测试或发布构建脚本；
 4. 不读取、不写入、不创建 `.cc-switch` 或 `.claude`。
 
 ## 项目初始化
 
 技能不再启动看板。状态文件放在项目 `.harness/`：`tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
+
+先按 [中文原字段契约](references/language-contract.md)填写项目与任务说明、证据摘要、评审理由及进度正文。四份文件必须存在；尚未执行时，证据/评审可留空，禁止复制演示记录伪装为执行结果。保留 ID、JSON 键、机器枚举和原始技术输出；不加 `_zh` 字段，不创建翻译文件。
+
+在项目根目录执行：
+
+```powershell
+$CodexRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+python -X utf8 (Join-Path $CodexRoot 'skills/task-harness/scripts/check_task_harness_language.py') .
+```
+
+退出码 `0` 表示结构与最低语言检查通过，`1` 表示契约不合格，`2` 表示无法读取或处理。正常任务禁止传 `--templates`。推进状态前先检查；失败修正源字段后重检，不让看板翻译兜底。通过不等于内容准确或任务通过独立评审。
 
 可视化看板是独立目录 `board/`，不随技能安装：
 
@@ -42,12 +53,21 @@ powershell -ExecutionPolicy Bypass -File .\board\start.ps1 -ProjectDir (Get-Loca
 
 Windows 用该脚本（UTF-8），不要双击 HTML，也不要为了刷新看板再跑技能安装脚本。
 
+## 更新已有安装与看板
+
+拉取 `codex` 分支只更新仓库文件，不会自动更新 `$CODEX_HOME/skills/task-harness`，也不会重启看板。
+
+1. 技能：从更新后的仓库重新执行安装脚本，保留脚本生成的旧版本备份。
+2. 源码看板：停止自己启动的旧进程，从更新后的 `board/start.ps1` 重新启动。
+3. 独立发布包：在仓库运行 `python -X utf8 scripts/build_board_release.py`，使用生成的完整 `board/release/TaskBoard-windows.zip`，不要混用旧服务端或旧校验器。
+4. 在授权范围内检查目标项目的源文件，按错误位置修正中文原字段；安装和看板均不会自动迁移项目数据。
+
 ## 评审
 
 实现者把当前任务、变更范围、证据和必要代码交给独立 Codex 上下文。评审者按 `references/review/completion-review.md` 检查，最后输出：
 
 ```text
-HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>
+HARNESS_REVIEW: pass|fail | <task-id> | <一句中文理由>
 ```
 
 没有独立上下文时记为 `blocked`，不要把同轮自检伪装为独立评审。
