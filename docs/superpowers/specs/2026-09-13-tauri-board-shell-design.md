@@ -1,3 +1,8 @@
+> **已废止（2026-09-13）**
+>
+> 本文档属于 JSON/JSONL 主存储时代，已被 `docs/superpowers/specs/2026-09-13-tauri-board-shell-db-design.md` 取代。
+> **不得按本文档实施或把文件契约当作桌面主路径。**
+
 # Task Harness 看板 Tauri 壳设计规格
 
 **日期：** 2026-09-13

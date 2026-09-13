@@ -1,3 +1,8 @@
+> **已废止（2026-09-13）**
+>
+> 本文档属于 JSON/JSONL 主存储时代，已被 `docs/superpowers/specs/2026-09-13-tauri-board-shell-db-design.md` 取代。
+> **不得按本文档实施。** 用户确认新规格后，应另写 `docs/superpowers/plans/2026-09-13-tauri-board-shell-db.md`。
+
 # Task Harness 看板 Tauri 壳 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
