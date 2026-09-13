@@ -1,0 +1,6 @@
+{
+  "name": "task-board",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Task Harness desktop board shell. Not shipped inside the EXE."
+}

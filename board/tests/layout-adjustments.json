@@ -1,0 +1,60 @@
+{
+  "request": [
+    "阶段默认折叠且展开互斥",
+    "键盘说明移至顶部，当前行向下延伸",
+    "左上状态补充已通过",
+    "契约错误改弹窗，不占 tabs 上方"
+  ],
+  "patches": [
+    {
+      "target": "code",
+      "before": "[...groups].map(([name,items])=>{",
+      "after": "[...groups].map(([name,items],groupIndex)=>{\n    const open = expandedStage === name;"
+    },
+    {
+      "target": "code",
+      "before": "'<section class=\"stage-group\"><header class=\"stage-head\"><h3>'+esc(name)+'</h3>'",
+      "after": "'<section class=\"stage-group\"><header class=\"stage-head\"><h3><button type=\"button\" class=\"stage-toggle\" id=\"stage-toggle-'+groupIndex+'\" data-stage-toggle=\"'+esc(name)+'\" aria-expanded=\"'+open+'\" aria-controls=\"stage-cards-'+groupIndex+'\"><span class=\"stage-arrow\" aria-hidden=\"true\">›</span>'+esc(name)+'</button></h3>'"
+    },
+    {
+      "target": "code",
+      "before": "'<div class=\"stage-cards\">'+items.map",
+      "after": "'<div class=\"stage-cards\" id=\"stage-cards-'+groupIndex+'\"'+(open?'':' hidden')+'>'+items.map"
+    },
+    {
+      "target": "html",
+      "before": "    <div class=\"keys\">\n      <h2>键盘</h2>\n      <p><span>载入 / 刷新</span><span><kbd>L</kbd> <kbd>R</kbd></span></p>\n      <p><span>上下行</span><span><kbd>J</kbd> <kbd>K</kbd></span></p>\n      <p><span>搜索</span><span><kbd>/</kbd></span></p>\n    </div>\n  </aside>\n\n  <header",
+      "after": "  </aside>\n\n  <header"
+    },
+    {
+      "target": "html",
+      "before": "    <div class=\"grow\"></div>\n    <label class=\"search-wrap\">",
+      "after": "    <div class=\"grow\"></div>\n    <details class=\"keys top-keys\">\n      <summary class=\"btn\">键盘操作</summary>\n      <div class=\"keys-panel\">\n        <h2>键盘</h2>\n        <p><span>载入 / 刷新</span><span><kbd>L</kbd> <kbd>R</kbd></span></p>\n        <p><span>上下行</span><span><kbd>J</kbd> <kbd>K</kbd></span></p>\n        <p><span>搜索</span><span><kbd>/</kbd></span></p>\n      </div>\n    </details>\n    <label class=\"search-wrap\">"
+    },
+    {
+      "target": "html",
+      "before": "      <button type=\"button\" data-filter=\"eligible\">",
+      "after": "      <button type=\"button\" data-filter=\"passed\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"m7.5 12 3 3 6-6\"/></svg><span class=\"nav-txt\">已通过<em>查看已通过任务</em></span><b id=\"c-passed\">0</b></button>\n      <button type=\"button\" data-filter=\"eligible\">"
+    },
+    {
+      "target": "html",
+      "before": "</style>",
+      "after": "\n/* 本次仅增加：互斥阶段折叠、顶部键盘说明、已通过筛选。 */\n.stage-toggle{display:inline-flex;align-items:center;gap:8px;padding:0;font:inherit;font-weight:inherit;color:inherit;text-align:left}\n.stage-arrow{display:inline-block;width:12px;font-size:18px;line-height:1;transform:rotate(0deg)}\n.stage-toggle[aria-expanded=\"true\"] .stage-arrow{transform:rotate(90deg)}\n.top .keys{display:block;position:relative;flex:none;padding:0;border:0}\n.top-keys>summary{list-style:none;cursor:pointer}.top-keys>summary::-webkit-details-marker{display:none}\n.keys-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:220px;padding:14px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}\nnav button[data-filter=\"passed\"]{--st:var(--st-passed)}\n\n</style>"
+    },
+    {
+      "target": "html",
+      "before": "</style>",
+      "after": "\n/* 错误改弹窗：不占主区 tabs 上方。 */\n.error-dialog[hidden]{display:none}\n.error-dialog{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px}\n.error-dialog .drawer-mask{position:absolute;inset:0;background:oklch(20% 0.01 80 / .45)}\n.error-panel{position:relative;z-index:1;width:min(720px,96vw);max-height:min(78vh,680px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:0 24px 64px oklch(20% 0.01 80 / .22);display:flex;flex-direction:column;min-height:0}\n.error-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line);flex:none}\n.error-head h2{margin:0;font:500 14px/1.2 var(--sans);color:var(--danger)}\n.error-sub{margin:4px 0 0;font-size:12px;color:var(--muted)}\n.error-body{margin:0;padding:14px 16px 16px;flex:1;min-height:0;overflow:auto;font:12px/1.55 var(--mono);color:var(--ink-2);white-space:pre-wrap;word-break:break-word}\n.status.has-detail{cursor:pointer;text-decoration:underline;text-underline-offset:3px}\n</style>"
+    },
+    {
+      "target": "html",
+      "before": "    <pre id=\"contract-error\" role=\"alert\" hidden></pre>\n    <div class=\"tabs\"",
+      "after": "    <div class=\"tabs\""
+    },
+    {
+      "target": "html",
+      "before": "</div>\n<script>\nwindow.addEventListener('error', function(e){",
+      "after": "</div>\n<div class=\"error-dialog\" id=\"error-dialog\" hidden>\n  <div class=\"drawer-mask\" data-close-error=\"1\"></div>\n  <section class=\"error-panel\" role=\"alertdialog\" aria-modal=\"true\" aria-labelledby=\"error-title\" aria-describedby=\"contract-error\">\n    <div class=\"error-head\">\n      <div>\n        <h2 id=\"error-title\">出错</h2>\n        <p class=\"error-sub\" id=\"error-sub\"></p>\n      </div>\n      <button class=\"btn-icon\" id=\"error-close\" type=\"button\" aria-label=\"关闭\">×</button>\n    </div>\n    <pre class=\"error-body\" id=\"contract-error\" role=\"alert\" hidden></pre>\n  </section>\n</div>\n<script>\nwindow.addEventListener('error', function(e){"
+    }
+  ]
+}

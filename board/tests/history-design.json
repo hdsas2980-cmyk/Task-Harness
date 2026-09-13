@@ -1,0 +1,24 @@
+{
+  "source": {
+    "thread": "01a094d6-5333-77c3-a97e-52faea68d294",
+    "rollout": "rollout-2026-09-12T17-40-46-01a094d6-5333-77c3-a97e-52faea68d294_01a094fd-a87d-7c62-9563-a082a5ee6999.jsonl",
+    "lines": [
+      166,
+      270
+    ],
+    "base": "0b62c90",
+    "base_hash_evidence_line": 48,
+    "base_sha256": {
+      "index.html": "4cfa6912a5d207434e98ee0cb1e34850b971f38621a6a7fcfc9d0c617a71bbab",
+      "app.js": "9edde12638366aa144db8d094dbcc711c74559b90e4a3af69cc6be6ad15527ad"
+    }
+  },
+  "style": "ff5d36a955fbc07c997410ec8cd922791a9b648013f430823d3197c88561fe9e",
+  "functions": {
+    "renderCards": "f40fec0692f4dda721ab1f1fc40104392c43ed3aec67e929f9ee50ec1262ad25",
+    "renderTrajectory": "cd8b21e2229829b3abb0ddb8864ffa1ee4e943579a5a8da407a71049f124f716",
+    "progressMarkup": "609bfb4df70594cd5b7b4530887c36f62d6dfa85fd09216d946174a007eb2b4e"
+  },
+  "html": "ad661df6caa0348f5250f2b3b75463660a08dc4a138389dd01da5ac72697ae6e",
+  "note": "renderTrajectory 来源文案从 tasks.json 改为 harness.db；其余历史指纹保持。"
+}

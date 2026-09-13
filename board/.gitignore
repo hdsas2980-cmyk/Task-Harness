@@ -1,3 +1,7 @@
 __pycache__/
 *.py[cod]
 .last-source
+release/
+release-desktop/
+tauri/src-tauri/target/
+tauri/src-tauri/gen/

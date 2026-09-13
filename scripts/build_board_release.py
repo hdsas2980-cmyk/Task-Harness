@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 import zipfile
@@ -13,8 +14,19 @@ ASSETS = {name: BOARD / name for name in (
     "serve.py", "sessions.py", "pick_dir.py", "start.bat", "start.ps1", "start.sh",
     "static/index.html", "static/app.js",
 )}
-ASSETS["使用说明.txt"] = BOARD / "README.md"
+ASSETS["使用说明.txt"] = BOARD / "RELEASE-NOTES.md"
 ASSETS["scripts/check_task_harness_language.py"] = ROOT / "scripts/check_task_harness_language.py"
+ASSETS["harness_db.py"] = ROOT / "harness_db.py"
+
+
+def is_runtime_file(relative):
+    """仅容许本程序生成的路径记忆和已知模块字节码；不打包、不删除。"""
+    if relative.as_posix() == ".last-source":
+        return True
+    if relative.parent.name != "__pycache__":
+        return False
+    match = re.fullmatch(r"([A-Za-z_][A-Za-z_0-9]*)\.(?:cpython|pypy)-[A-Za-z0-9_-]+(?:\.opt-[12])?\.pyc", relative.name)
+    return bool(match and (relative.parent.parent / (match[1] + ".py")).as_posix() in ASSETS)
 
 
 def build(output):
@@ -29,7 +41,7 @@ def build(output):
         for path in bundle.rglob("*"):
             if path.is_symlink() or not path.resolve().is_relative_to(bundle):
                 raise ValueError(f"发布目录含重定向路径：{path}")
-            if path.is_file() and path.relative_to(bundle).as_posix() not in expected:
+            if path.is_file() and path.relative_to(bundle).as_posix() not in expected and not is_runtime_file(path.relative_to(bundle)):
                 raise ValueError(f"发布目录存在未知残留，请人工处理后重建：{path}")
     # 先检查全部输入，避免缺失源码时发布一半。
     payload = {name: path.read_bytes() for name, path in ASSETS.items()}

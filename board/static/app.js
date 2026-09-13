@@ -5,7 +5,7 @@ const labels = {pending:'待处理',active:'进行中',evidence_ready:'待独立
 const colors = {pending:'var(--st-pending)',active:'var(--st-active)',evidence_ready:'var(--st-ready)',passed:'var(--st-passed)',blocked:'var(--st-blocked)',regressed:'var(--st-regressed)'};
 const states = Object.keys(labels);
 const optional = ['evidence.jsonl','reviews.jsonl','progress.txt','board.json'];
-const views = [['all','全部任务'],['blocked','已阻塞'],['evidence_ready','待评审'],['active','进行中'],['eligible','可推进']];
+const views = [['all','全部任务'],['blocked','已阻塞'],['evidence_ready','待评审'],['active','进行中'],['passed','已通过'],['eligible','可推进']];
 let model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:'',board:null};
 // 状态词典：每个词对"人"到底意味着什么 —— 尤其 evidence_ready 最容易误读。
 const means = {
@@ -19,18 +19,40 @@ const means = {
 const stateSteps = ['pending','active','evidence_ready','passed'];
 let visibleRows = [], wantedId = null, loadDismissed = false, dialogTrigger = null;
 let selected = 0, filter = 'all', sortBy = 'priority', heroCmd = '', mainTab = 'list', eventFilter = 'both';
+let expandedStage = null;
 let chain = Promise.resolve(), statusTimer = null;
+let errorState = {title:'出错', summary:'', detail:''};
 const timers = {
   set(fn, ms){ if(typeof setTimeout === 'function'){ timers.id = setTimeout(fn, ms); } },
   clear(){ if(typeof clearTimeout === 'function' && timers.id != null){ clearTimeout(timers.id); } timers.id = null; }
 };
 const esc = value => String(typeof value === 'object' ? JSON.stringify(value) : value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const setText = (id,text) => { const el = $(id); if(el) el.textContent = text; };
-function status(text, error=false){ timers.clear(); setText('status',text); const el = $('status'); if(el && el.classList && el.classList.toggle) el.classList.toggle('err',error); }
+function status(text, error=false){ timers.clear(); setText('status',text); const el = $('status'); if(el && el.classList && el.classList.toggle){ el.classList.toggle('err',error); el.classList.toggle('has-detail', !!(error && errorState.detail)); } if(el && el.setAttribute) el.setAttribute('title', (error && errorState.detail) ? '查看完整错误' : ''); }
 function flash(text){ const el = $('status'); const prev = el ? el.textContent : ''; status(text); timers.set(()=>status(prev), 1600); }
 function isLocalFile(){ return location.protocol === 'file:'; }
 function localFileHint(){ return '请用 board/start.ps1 启动 HTTP 看板，不要打开 file://。'; }
 function parse(texts){
+  if(texts && texts.__snapshot){
+    const snap = texts.__snapshot;
+    const meta = snap.meta && typeof snap.meta === 'object' ? snap.meta : {};
+    let taskRows = [];
+    if(Array.isArray(snap.tasks)) taskRows = snap.tasks;
+    else if(snap.tasks && typeof snap.tasks === 'object' && Array.isArray(snap.tasks.tasks)) taskRows = snap.tasks.tasks;
+    else if(snap.tasks && typeof snap.tasks === 'object') taskRows = Object.values(snap.tasks);
+    else throw Error('数据库快照必须包含任务数组');
+    const tasks = {project: meta.project || snap.project || (snap.tasks && snap.tasks.project) || '', tasks: taskRows};
+    if(meta.rev !== undefined) tasks.rev = meta.rev;
+    else if(snap.rev !== undefined) tasks.rev = snap.rev;
+    else if(snap.tasks && snap.tasks.rev !== undefined) tasks.rev = snap.tasks.rev;
+    const ids = new Set();
+    for(const t of tasks.tasks){
+      if(!t || typeof t.id !== 'string' || !t.id.trim() || ids.has(t.id)) throw Error('任务编号缺失或重复');
+      if(!Object.hasOwn(labels,t.status)) throw Error('任务包含未知状态');
+      ids.add(t.id);
+    }
+    return {tasks, evidence:Array.isArray(snap.evidence)?snap.evidence:[], reviews:Array.isArray(snap.reviews)?snap.reviews:[], progress:typeof snap.progress==='string'?snap.progress:'', board:snap.board && typeof snap.board==='object'?snap.board:null};
+  }
   if(!Object.hasOwn(texts,'tasks.json')) throw Error('缺少任务文件；原任务保持不变');
   let tasks;
   try{tasks = JSON.parse(texts['tasks.json'].replace(/^\uFEFF/,''));}catch{throw Error('任务文件格式错误；原任务保持不变');}
@@ -82,9 +104,24 @@ function depMarkup(byId, deps){
   const done = deps.filter(d=>byId.get(d)?.status === 'passed').length;
   return '<span class="bar" title="依赖 ' + done + '/' + deps.length + ' 已通过"><i style="width:' + (done/deps.length*100) + '%"></i></span>';
 }
+function renderMap(){
+  const card = $('map-card'); if(!card) return;
+  const b = model.board;
+  if(!b || !(b.where || (b.next && b.next.length))){ card.hidden = true; return; }
+  card.hidden = false;
+  const where = $('map-where');
+  if(where) where.textContent = b.where || '';
+  const nextEl = $('map-next');
+  if(nextEl){
+    const next = b.next || [];
+    nextEl.innerHTML = next.length ? '<ul>' + next.map(n=>'<li><b>' + esc(n.task) + '</b> —— 为什么是它：' + esc(n.why || '未写')
+      + (n.see ? '<br><span class="src">做完你会看到：' + esc(n.see) + '</span>' : '') + '</li>').join('') + '</ul>'
+      : '';
+  }
+}
 function waveOf(t){ return t.wave || (t.phase != null ? '阶段 ' + t.phase : '未分组'); }
 function setTab(tab){
-  const tabs = ['list','trace','log'];
+  const tabs = ['list','trajectory','log'];
   mainTab = tabs.indexOf(tab) >= 0 ? tab : 'list';
   for(const id of tabs){
     const panel = $('tab-' + id);
@@ -113,85 +150,97 @@ function groupedRows(rows){
   }
   return groups;
 }
-function stageMarkup(t){
-  const index = stateSteps.indexOf(t.status);
-  return '<div class="stage-progress" role="img" aria-label="状态阶段：' + esc(labels[t.status]) + '，不代表完成百分比">'
-    + stateSteps.map((state,i)=>'<span class="' + (i === index ? 'current' : '') + '"><i></i>' + esc(labels[state]) + '</span>').join('')
+function auditEvents(task){
+  if(!task) return [];
+  const rows = [
+    ...model.evidence.filter(x=>!isMetaRow(x) && x.task === task.id).map(x=>({...x,kind:'e',source:'evidence.jsonl'})),
+    ...model.reviews.filter(x=>!isMetaRow(x) && x.task === task.id).map(x=>({...x,kind:'r',source:'reviews.jsonl'}))
+  ];
+  return rows.sort((a,b)=>{
+    const ta = Date.parse(a.ts), tb = Date.parse(b.ts);
+    if(Number.isFinite(ta) && Number.isFinite(tb)) return ta-tb;
+    if(Number.isFinite(ta)) return -1;
+    if(Number.isFinite(tb)) return 1;
+    return 0; // Undated records stay in file order; do not invent their chronology.
+  });
+}
+function auditSummary(task){
+  const all = auditEvents(task);
+  const evs = all.filter(x=>x.kind==='e'), rvs = all.filter(x=>x.kind==='r');
+  const ev = evs.at(-1), rv = rvs.at(-1);
+  let evidence = !ev ? '尚未提交验证' : ev.exit === 0 ? '最新验证通过' : ev.exit == null ? '验证结果未记录' : '最新验证未通过';
+  let review = !rv ? '尚未评审' : rv.verdict === 'pass' ? '评审记录通过' : rv.verdict === 'fail' ? '评审未通过' : '评审结论未明确';
+  if(rv && !evs.some(e=>e.id && e.id === rv.ev)) review = '关联证据缺失';
+  else if(rv?.verdict === 'pass' && !rv.reviewer_context) review = '缺少独立评审上下文';
+  else if(rv?.verdict === 'pass' && ev && rv.ev !== ev.id) review = '最新证据尚待评审';
+  const uncertain = all.some(x=>!Number.isFinite(Date.parse(x.ts)));
+  if(uncertain){ evidence = evidence.replace('最新','末条'); review = review.replace('最新','末条'); }
+  return {evs,rvs,evidence,review,uncertain};
+}
+function progressMarkup(t){
+  const step = stateSteps.indexOf(t.status);
+  return '<div class="card-progress" aria-label="状态进度：' + esc(labels[t.status]) + '，不是工时百分比">'
+    + stateSteps.map((st,i)=>'<span class="'+(i<=step?'reached':'')+'"><i></i>'+esc(labels[st])+'</span>').join('')
     + '</div>';
 }
 function renderCards(rows, byId){
-  const tasksEl = $('tasks');
-  if(!tasksEl) return;
-  let i = 0;
-  tasksEl.innerHTML = [...groupedRows(rows)].map(([stage, items])=>{
-    const passed = items.filter(t=>t.status === 'passed').length;
-    return '<section class="task-group"><header class="group-head"><h2>' + esc(stage) + '</h2><span>' + passed + '/' + items.length + ' 已通过</span></header>'
-      + items.map(t=>{
-        const index = i++;
-        const deps = t.depends_on || [];
-        const evidence = model.evidence.filter(e=>!isMetaRow(e) && e.task === t.id);
-        const reviews = model.reviews.filter(r=>!isMetaRow(r) && r.task === t.id);
-        const e = evidence.at(-1), r = reviews.at(-1), g = gate(t);
-        return '<article class="tcard is-' + esc(t.status) + '" data-status="' + esc(t.status) + '" data-i="' + index + '" aria-selected="' + (index === selected) + '">'
-          + '<div class="row"><span class="id">' + esc(t.id) + '</span><span class="pri">优先级 ' + esc(t.priority ?? '—') + '</span></div>'
-          + '<div class="state"><i class="dot" style="background:' + colors[t.status] + '"></i>' + labels[t.status] + '</div>'
-          + '<button type="button" class="task-select" data-select-task="1">' + esc(t.name || t.desc || '未填写任务名称') + '</button>'
-          + '<p class="desc">' + esc(t.desc || '') + '</p>'
-          + '<p class="task-reason">当前原因：' + esc(t.reason || '未填写') + '</p>'
-          + '<p class="task-next">下一步：' + esc(t.next || '未填写') + '</p>'
-          + '<div class="meta"><span>依赖 ' + depMarkup(byId, deps) + ' ' + (deps.length || '无') + '</span>'
-          + (g ? '<span class="flag ' + (g.startsWith('门禁') ? 'warn' : '') + '">' + esc(g) + '</span>' : '') + '</div>'
-          + '<footer class="card-footer">' + stageMarkup(t)
-          + '<div class="card-audits"><button type="button" data-audit="e">证据 ' + evidence.length + '</button><span>' + esc(e?.summary || '暂无验证记录') + '</span>'
-          + '<button type="button" data-audit="r">评审 ' + reviews.length + '</button><span>' + esc(r?.reason || '待独立评审') + '</span></div></footer></article>';
-      }).join('') + '</section>';
+  const tasksEl = $('tasks'); if(!tasksEl) return;
+  const groups = new Map();
+  rows.forEach((t,i)=>{ const key=waveOf(t); if(!groups.has(key)) groups.set(key,[]); groups.get(key).push({t,i}); });
+  tasksEl.innerHTML = [...groups].map(([name,items],groupIndex)=>{
+    const open = expandedStage === name;
+    const passed = items.filter(({t})=>t.status==='passed').length;
+    return '<section class="stage-group"><header class="stage-head"><h3><button type="button" class="stage-toggle" id="stage-toggle-'+groupIndex+'" data-stage-toggle="'+esc(name)+'" aria-expanded="'+open+'" aria-controls="stage-cards-'+groupIndex+'"><span class="stage-arrow" aria-hidden="true">›</span>'+esc(name)+'</button></h3>'
+      + '<span>'+items.length+' 项 · '+passed+' 项状态已通过</span><div class="stage-progress" role="meter" aria-label="本组状态已通过比例" aria-valuemin="0" aria-valuemax="'+items.length+'" aria-valuenow="'+passed+'"><i style="width:'+(100*passed/items.length)+'%"></i></div></header>'
+      + (name==='未分组'?'<p class="group-note">任务源未填写 wave / phase，保留在未分组；不根据编号或状态猜测阶段。</p>':'')
+      + '<div class="stage-cards" id="stage-cards-'+groupIndex+'"'+(open?'':' hidden')+'>'+items.map(({t,i})=>{
+        const title=t.desc||t.description||'未填写';
+        const g=gate(t), a=auditSummary(t), deps=t.depends_on||[];
+        return '<article class="tcard is-'+esc(t.status)+'" data-status="'+esc(t.status)+'" data-i="'+i+'" aria-selected="'+(i===selected)+'">'
+          + '<div class="row"><span class="id">'+esc(t.id)+'</span><span class="pri">P'+esc(t.priority??'—')+'</span></div>'
+          + '<div class="state"><i class="dot" style="background:'+colors[t.status]+'"></i>'+labels[t.status]+'</div>'
+          + '<p class="desc" title="'+esc(title)+'">'+esc(title)+'</p>'
+          + '<div class="meta">依赖 '+esc(deps.length?deps.map(d=>d+' / '+(byId.has(d)?labels[byId.get(d).status]:'缺失')).join('、'):'无')+'</div>'
+          + (t.reason?'<p class="card-warning">'+esc(asText(t.reason))+'</p>':'')
+          + '<footer class="card-bottom">'+progressMarkup(t)
+          + '<p class="audit-brief">'+esc(a.evidence)+' · '+esc(a.review)+'</p>'
+          + (g.startsWith('门禁')?'<p class="card-warning">状态已通过，但证据 / 评审关联不完整</p>':'')
+          + '<div class="card-actions"><button type="button" class="btn" data-action="events" data-i="'+i+'" aria-label="查看 '+esc(t.id)+' 的证据与评审">证据 '+a.evs.length+' · 评审 '+a.rvs.length+' ↗</button>'
+          + '<button type="button" class="trace-link" data-action="trajectory" data-i="'+i+'">任务轨迹 →</button></div></footer></article>';
+      }).join('')+'</div></section>';
   }).join('') || '<div class="empty">暂无匹配任务。按 L 选择项目任务目录，按 R 刷新。</div>';
 }
-function progressEntries(){
-  const entries = [];
-  let current = null;
-  let fence = false;
-  String(model.progress || '').split(/\r?\n/).forEach((line, i)=>{
-    if(line.trim().startsWith('```')) fence = !fence;
-    const match = !fence && line.match(/^##\s+([^|]+)\|\s*([^|]+)\|\s*(.+)$/);
-    if(match){
-      current = {ts:match[1].trim(), task:match[2].trim(), title:match[3].trim(), line:i+1, body:[]};
-      entries.push(current);
-    }else if(current){ current.body.push(line); }
-  });
-  return entries;
-}
-function timeOrder(a,b){
-  const at = Date.parse(a.ts), bt = Date.parse(b.ts);
-  if(Number.isNaN(at) && Number.isNaN(bt)) return 0;
-  if(Number.isNaN(at)) return 1;
-  if(Number.isNaN(bt)) return -1;
-  return bt - at;
-}
 function renderTrajectory(current){
-  const box = $('trace'); if(!box) return;
-  if(!current){ box.innerHTML = '<p class="empty-note">请先在任务列表中选择任务</p>'; return; }
-  const rows = [
-    ...model.evidence.filter(x=>!isMetaRow(x) && x.task === current.id).map(x=>({...x, title:'验证记录', text:x.summary, source:'evidence.jsonl:' + x._sourceLine})),
-    ...model.reviews.filter(x=>!isMetaRow(x) && x.task === current.id).map(x=>({...x, title:'独立评审 · ' + (x.verdict === 'pass' ? '通过' : '未通过'), text:x.reason, source:'reviews.jsonl:' + x._sourceLine})),
-    ...progressEntries().filter(x=>x.task === current.id).map(x=>({...x, text:x.body.join('\n'), source:'progress.txt:' + x.line}))
-  ].sort(timeOrder);
-  box.innerHTML = '<header class="trace-head"><h2>' + esc(current.name || current.desc) + '</h2><span class="id">' + esc(current.id) + '</span><p>当前状态：' + labels[current.status] + ' · 仅展示已落盘记录，不推测历史状态</p></header>'
-    + (rows.length ? '<ol class="trace-list">' + rows.slice(0,120).map(x=>'<li><div><b>' + esc(x.title) + '</b><time>' + esc(Number.isNaN(Date.parse(x.ts)) ? '未提供有效时间' : fmtWhen(x.ts)) + '</time></div><pre>' + esc(x.text) + '</pre><small>' + esc(x.source) + (x.id ? ' · ' + esc(x.id) : '') + '</small></li>').join('') + '</ol>'
-      + (rows.length > 120 ? '<p>仅展示最近 120 条；完整记录请读取源文件。</p>' : '') : '<p class="empty-note">当前任务暂无轨迹记录</p>');
+  const box=$('trajectory'); if(!box) return;
+  if(!current){ box.innerHTML='<p class="empty-note">当前没有选中任务，请先在任务列表中点击一张任务卡。</p>'; return; }
+  const entries=auditEvents(current);
+  box.innerHTML = '<div class="trajectory-current"><span>跟随当前行 · 当前快照，不是历史事件</span><h3>'+esc(current.id)+'</h3><p>'+esc(labels[current.status])+' · '+esc(current.desc||current.description||'未填写')+'</p>'
+    + '<p class="muted">来源 harness.db · 修订号 '+esc(model.tasks.rev??'未记录')+'。状态变迁未单独记录，不能从当前状态补造创建、开始或完成时间。</p></div>'
+    + (entries.length?'<ol class="audit-timeline">'+entries.map(x=>'<li><div class="trace-time">'+esc(x.ts||'时间未记录')+(!x.ts?'':' · '+(Number.isFinite(Date.parse(x.ts))?'':'时间格式无效，顺序未知'))+'</div>'
+      + (x.kind==='e'?renderEvidenceCard(x):renderReviewCard(x))+'</li>').join('')+'</ol>'
+      : '<p class="empty-note">当前任务暂无可追溯记录；不会根据当前状态补造历史事件。</p>');
 }
-function renderProgress(){
-  const box = $('progress'); if(!box) return;
-  const entries = progressEntries().reverse();
-  box.innerHTML = entries.length ? entries.slice(0,80).map((x,i)=>{
-    const summary = x.body.find(line=>line.trim().startsWith('- 进展')) || '展开阅读本轮记录';
-    return '<details class="progress-entry"' + (i === 0 ? ' open' : '') + '><summary><span>' + esc(x.title) + ' · ' + esc(x.task) + '</span><time>' + esc(x.ts) + '</time><p>' + esc(summary) + '</p></summary><pre>' + esc(x.body.join('\n').trim()) + '</pre><small>progress.txt:' + x.line + '</small></details>';
-  }).join('') + (entries.length > 80 ? '<p>仅展示最近 80 段；完整记录请读取源文件。</p>' : '') : '<p class="empty-note">暂无分段进度；按技能模板追加任务编号与中文进展。</p>';
-  box.innerHTML += '<details class="raw-progress"><summary>查看进度原文</summary><pre>' + esc(model.progress || '暂无进度日志') + '</pre></details>';
+function progressRows(raw){
+  const lines=String(raw||'').split(/\r?\n/);
+  return lines.map((line,i)=>{
+    const ts=(line.match(/\b20\d{2}-\d{2}-\d{2}(?:T|\s)[^ ]+/)||[])[0]||'';
+    const kind=/HARNESS_STATUS|EXIT_SIGNAL/i.test(line)?'门禁':/error|fail|blocked|阻塞|失败/i.test(line)?'异常':/pass|passed|完成|通过/i.test(line)?'通过':/start|active|进行|开始/i.test(line)?'进行中':'记录';
+    return {line,ts,kind,no:i+1};
+  }).filter(x=>x.line.trim());
+}
+function renderProgressLog(){
+  const box=$('progress-log'); if(!box) return;
+  const rows=progressRows(model.progress);
+  const recent=rows.slice(-8).reverse();
+  const exit=[...model.progress.matchAll(/EXIT_SIGNAL\s*[:=]\s*(true|false)/gi)].at(-1)?.[1];
+  const summary=exit ? (exit.toLowerCase()==='true'?'已发出退出信号':'尚未发出退出信号') : '日志中未发现退出信号';
+  box.innerHTML='<div class="log-summary"><div><b>日志概览</b><span>'+rows.length+' 条记录</span></div><strong class="log-signal '+(exit==='true'?'ok':exit==='false'?'warn':'muted')+'">'+esc(summary)+'</strong><small>以下按原始日志行展示；标签只是辅助识别，不改变日志含义。</small></div>'
+    + (recent.length?'<ol class="progress-list">'+recent.map(x=>'<li class="log-'+x.kind+'"><span class="log-kind">'+x.kind+'</span><span class="log-line">'+esc(x.line)+'</span><span class="log-no">第 '+x.no+' 行</span></li>').join('')+'</ol>':'<p class="empty-note">暂无进度日志。</p>')
+    + '<details class="raw-log"><summary>展开全部原始日志（'+rows.length+' 条）</summary><pre>'+esc(model.progress||'暂无进度日志')+'</pre></details>';
 }
 function render(){
   try{ renderAll(); }
-  catch(e){ status('界面刷新失败：' + ((e && e.message) || e || '未知错误'), true); }
+  catch(e){ reportError(e, '界面刷新失败'); }
 }
 function renderAll(){
   const all = model.tasks.tasks;
@@ -206,6 +255,7 @@ function renderAll(){
   setText('c-all', String(all.length));
   setText('c-eligible', String(ready.length));
   setText('c-active', String(counts.active));
+  setText('c-passed', String(counts.passed));
   setText('c-evidence_ready', String(counts.evidence_ready));
   setText('c-blocked', String(counts.blocked));
   for(const pair of views){
@@ -240,7 +290,9 @@ function renderAll(){
   rows.sort((a,b)=> sortBy === 'id' ? String(a.id).localeCompare(String(b.id))
     : sortBy === 'status' ? states.indexOf(a.status) - states.indexOf(b.status)
     : Number(a.priority ?? 999999) - Number(b.priority ?? 999999));
-  rows = [...groupedRows(rows).values()].flat();
+  const groups = groupedRows(rows);
+  if(expandedStage !== null && !groups.has(expandedStage)) expandedStage = null;
+  rows = [...groups.values()].flat();
   if(wantedId){ const index = rows.findIndex(t=>t.id === wantedId); if(index >= 0) selected = index; wantedId = null; }
   visibleRows = rows;
   if(selected >= rows.length) selected = Math.max(0, rows.length - 1);
@@ -270,7 +322,8 @@ function renderAll(){
   if($('copy')) $('copy').disabled = !heroCmd;
   renderEvents(current);
   renderTrajectory(current);
-  renderProgress();
+  renderProgressLog();
+  renderMap();
 }
 function isMetaRow(x){ return !x || x._comment || x.comment; }
 function asText(value){
@@ -292,25 +345,39 @@ function extrasOf(x, known){
   return Object.keys(x).filter(k => !known.has(k) && !String(k).startsWith('_') && x[k] != null && x[k] !== '')
     .map(k => kv(k, x[k])).join('');
 }
+function sourceLabel(x, filename){
+  return filename + (x._sourceLine ? ':'+x._sourceLine : '') + (x.id ? ' · '+asText(x.id) : '');
+}
 function renderEvidenceCard(x){
-  const ok = x.exit === 0;
-  return '<article class="event is-e"><header><b>证据 · ' + (ok ? '命令成功' : '未成功验证') + '</b><span class="id">' + esc(x.id) + '</span></header>'
-    + '<p class="event-summary">' + esc(x.summary || '缺少中文摘要（契约失败）') + '</p>'
-    + '<small>' + esc(x.task) + ' · ' + esc(fmtWhen(x.ts) || '未提供时间') + '</small>'
-    + '<details><summary>查看验证细节</summary>' + kv('命令', x.cmd) + kv('退出码', x.exit)
-    + kv('原始测试输出', x.tests) + kv('修订标识', x.rev) + kv('编码', encodingOf(x))
-    + kv('产物', x.artifacts) + kv('环境', x.environment) + '</details></article>';
+  const ok = x.exit === 0, cls = ok?'ok':x.exit==null?'miss':'bad';
+  return '<article class="event is-e"><header><b>验证记录</b><span class="badge '+cls+'">'+(ok?'验证通过':x.exit==null?'结果未记录':'验证未通过')+'</span></header>'
+    + '<p class="event-summary">'+esc(asText(x.summary)||(ok?'命令成功退出；这不等于任务已完成。':'请展开检查验证结果。'))+'</p>'
+    + '<p class="event-source">'+esc(sourceLabel(x,'evidence.jsonl'))+'</p>'
+    + '<details class="event-details"><summary>查看命令与技术详情</summary>'
+    + kv('任务',x.task)+kv('命令',x.cmd)+kv('退出码',x.exit)+kv('测试摘要',x.tests||x.summary)+kv('修订标识',x.rev)
+    + kv('编码',encodingOf(x))+kv('产物',x.artifacts)+kv('环境',x.environment)+kv('时间',x.ts)
+    + extrasOf(x,new Set(['id','task','cmd','exit','tests','summary','rev','encoding','artifacts','environment','ts','kind','source']))+'</details></article>';
 }
 function renderReviewCard(x){
-  return '<article class="event is-r"><header><b>独立评审 · ' + (x.verdict === 'pass' ? '通过' : x.verdict === 'fail' ? '未通过' : '结论未明确') + '</b><span class="id">' + esc(x.id) + '</span></header>'
-    + '<p class="event-summary">' + esc(x.reason || '缺少中文理由（契约失败）') + '</p>'
-    + '<small>' + esc(x.task) + ' · ' + esc(fmtWhen(x.ts) || '未提供时间') + '</small>'
-    + '<details><summary>查看评审依据</summary>' + kv('对应证据', x.ev) + kv('评审上下文', x.reviewer_context) + '</details></article>';
+  const ev = model.evidence.find(e=>!isMetaRow(e)&&e.task===x.task&&e.id&&e.id===x.ev);
+  const link = !ev?'关联证据缺失':ev.exit!==0?'关联验证未通过':!x.reviewer_context?'缺少独立评审上下文':'已关联证据；评审独立性须人工核验';
+  const verdict = x.verdict==='pass'?'评审通过':x.verdict==='fail'?'评审未通过':'结论未明确';
+  return '<article class="event is-r"><header><b>评审记录</b><span class="badge '+(x.verdict==='pass'?'ok':x.verdict==='fail'?'bad':'miss')+'">'+verdict+'</span></header>'
+    + '<p class="event-summary">'+esc(asText(x.reason||x.note)||'未填写评审理由')+'</p><p class="review-link">'+esc(link)+'</p>'
+    + '<p class="event-source">'+esc(sourceLabel(x,'reviews.jsonl'))+' → '+esc(x.ev||'未填写证据编号')+'</p>'
+    + '<details class="event-details"><summary>查看评审人、关联与原始字段</summary>'
+    + kv('任务',x.task)+kv('评审上下文',x.reviewer_context)+kv('对应证据',x.ev)+kv('时间',x.ts)
+    + extrasOf(x,new Set(['id','task','ev','reviewer_context','verdict','reason','note','ts','kind','source']))+'</details></article>';
 }
 function renderEvents(current){
   const eventsEl = $('events');
   if(!eventsEl) return;
   const currentId = current && current.id;
+  const summary = $('events-summary');
+  if(summary){
+    const a=current?auditSummary(current):null;
+    summary.innerHTML=a?'<b>'+esc(a.evidence)+'</b><span>'+esc(a.review)+'</span><small>'+esc(a.uncertain?'部分记录没有有效时间，末条按文件顺序展示。':'按记录时间展示；评审通过也不自动修改任务状态。')+'</small>':'';
+  }
   const belongsToCurrent = x => currentId && !isMetaRow(x) && x.task === currentId;
   const items = [
     ...model.evidence.filter(belongsToCurrent).map(x => ({...x, kind:'e'})),
@@ -336,9 +403,69 @@ function renderEvents(current){
   eventsEl.innerHTML = shown.map(x => x.kind === 'e' ? renderEvidenceCard(x) : renderReviewCard(x)).join('')
     || '<p class="empty-note">' + empty + '</p>';
 }
+function errorDialog(){ return $('error-dialog'); }
+function firstLine(text){
+  const s = String(text || '').replace(/\s+/g,' ').trim();
+  return s.length > 72 ? s.slice(0,72) + '…' : s;
+}
+function isLongError(text){
+  const s = String(text || '');
+  return /[\n\r]/.test(s) || s.length > 80;
+}
+function openErrorDialog(title, detail, summary){
+  errorState = {title: title || '出错', detail: String(detail || ''), summary: summary || ''};
+  const dlg = errorDialog();
+  if(dlg) dlg.hidden = false;
+  setText('error-title', errorState.title);
+  setText('error-sub', errorState.summary);
+  const box = $('contract-error');
+  if(box){ box.hidden = false; box.textContent = errorState.detail; }
+  const close = $('error-close');
+  if(close && close.focus) close.focus();
+}
+function closeErrorDialog(){
+  const dlg = errorDialog();
+  if(dlg) dlg.hidden = true;
+}
+function clearErrorDialog(){
+  closeErrorDialog();
+  errorState = {title:'出错', summary:'', detail:''};
+  const box = $('contract-error');
+  if(box){ box.hidden = true; box.textContent = ''; }
+  setText('error-title', '出错');
+  setText('error-sub', '');
+}
+function reopenErrorDialog(){
+  if(!errorState.detail) return false;
+  openErrorDialog(errorState.title, errorState.detail, errorState.summary);
+  return true;
+}
+function reportError(e, prefix){
+  if(e && e.shown) return;
+  const raw = (e && e.message) || e || '未知错误';
+  const text = String(raw);
+  const head = prefix || '出错';
+  if(isLongError(text)){
+    openErrorDialog(head, text, '完整内容在弹窗中，关闭后可点底栏再看');
+    status(head + '：' + firstLine(text) + '，点此查看', true);
+    return;
+  }
+  status(head + '：' + text, true);
+}
+function showContractErrors(errors){
+  const list = Array.isArray(errors) ? errors.map(String) : [String(errors || '')];
+  const title = '中文契约失败';
+  const detail = title + '，请修复 harness.db 中的中文原字段：\n' + list.join('\n');
+  showEmpty(title);
+  openErrorDialog(title, detail, '共 ' + list.length + ' 条，关闭后可点底栏再看');
+  status(title + '，共 ' + list.length + ' 条，点此查看', true);
+  const err = Error(detail);
+  err.shown = true;
+  throw err;
+}
 function showEmpty(message){
   lastStamp = '';
-  visibleRows = []; wantedId = null;
+  visibleRows = []; wantedId = null; expandedStage = null;
   model = {tasks:{tasks:[]},evidence:[],reviews:[],progress:''};
   selected = 0;
   render();
@@ -348,7 +475,7 @@ function guarded(fn){
   const run = chain.then(async()=>{
     const r = $('refresh'), l = $('load');
     try{ await fn(); }
-    catch(e){ status('读取失败：' + ((e && e.message) || e || '未知错误'), true); }
+    catch(e){ reportError(e, '读取失败'); }
     finally{
       if(r) r.disabled = false;
       if(l) l.disabled = false;
@@ -360,6 +487,7 @@ function guarded(fn){
 let selectedPath = '';
 let lastSource = '';
 let sessionCatalog = {projects:[], suggested:null, sessions_dir:''};
+let sessionRequestId = 0;
 let bootTried = false;
 function setDirLabel(path){
   const el = $('project');
@@ -442,7 +570,7 @@ function renderLoadList(){
     const title = row.latest_title || row.project_name || row.cwd || '未命名会话';
     const badge = row.has_harness
       ? '<span class="badge ok">看板 ' + esc(row.task_count == null ? '' : (row.task_count + ' 项')) + '</span>'
-      : '<span class="badge miss">无 tasks.json</span>';
+      : '<span class="badge miss">无 harness.db</span>';
     const isSug = suggested.source && row.source && suggested.source === row.source;
     return '<button type="button" class="load-row' + (isSug ? ' is-suggested' : '') + '" data-i="' + i + '">'
       + '<span><span class="title">' + esc(title) + '</span>'
@@ -454,33 +582,47 @@ function renderLoadList(){
   box.querySelectorAll('.load-row').forEach((btn,i)=>{
     btn.addEventListener('click', ()=>{
       const row = rows[i];
-      guarded(()=>applySource(row.source || row.cwd, row.has_harness ? '已根据会话载入' : '已绑定目录（尚未编排任务）'));
+      return guarded(()=>applySource(row.source || row.cwd, row.has_harness ? '已根据会话载入' : '已绑定目录（尚未编排任务）'));
     });
   });
 }
 async function refreshSessions(){
-  if(isLocalFile()){
-    sessionCatalog = {projects:[], suggested:null, sessions_dir:''};
+  const requestId = ++sessionRequestId;
+  const box = $('load-list');
+  const note = $('load-session-status');
+  sessionCatalog = {projects:[], suggested:null, sessions_dir:''};
+  if(box){ box.innerHTML = ''; box.setAttribute('aria-busy','true'); }
+  if(note){ note.textContent = '正在读取本机 Codex 会话…'; note.classList.remove('err'); }
+  try{
+    if(isLocalFile()) throw Error(localFileHint());
+    const data = await api('/api/sessions');
+    if(!data || !Array.isArray(data.projects) || typeof data.sessions_dir !== 'string'){
+      throw Error('会话接口返回格式不正确，请使用配套的独立看板服务，不要混用旧页面或旧服务');
+    }
+    if(requestId !== sessionRequestId) return null;
+    sessionCatalog = data;
     renderLoadList();
-    return null;
+    if(note) note.textContent = '已读取 ' + data.projects.length + ' 个工作目录 · 会话根目录：' + data.sessions_dir;
+    return data;
+  }catch(e){
+    if(requestId === sessionRequestId){
+      if(note){ note.textContent = '读取会话失败：' + (e.message || e) + '。可点击“刷新会话”重试，或手动指定目录。'; note.classList.add('err'); }
+      if(box) box.innerHTML = '';
+    }
+    throw e;
+  }finally{
+    if(requestId === sessionRequestId && box) box.setAttribute('aria-busy','false');
   }
-  const data = await api('/api/sessions');
-  sessionCatalog = data || {projects:[], suggested:null};
-  renderLoadList();
-  return sessionCatalog;
 }
 function snapshotFiles(data){
-  const files = data?.files;
-  if(data?.contract?.errors?.length){
-    const message = '中文契约失败，请修复任务原文件：\n' + data.contract.errors.join('\n');
-    showEmpty('中文契约失败');
-    const box = $('contract-error'); if(box){ box.hidden = false; box.textContent = message; }
-    throw Error(message);
+  if(data?.contract?.errors?.length) showContractErrors(data.contract.errors);
+  if(!data?.snapshot){
+    clearErrorDialog();
+    return null;
   }
-  if(!files?.['tasks.json']) return null;
   if(!data.contract || !Array.isArray(data.contract.errors)) throw Error('缺少中文契约检查结果，请使用配套服务启动看板');
-  const box = $('contract-error'); if(box){ box.hidden = true; box.textContent = ''; }
-  return files;
+  clearErrorDialog();
+  return {__snapshot:data.snapshot};
 }
 async function applySource(path, label){
   const target = String(path || '').trim();
@@ -491,11 +633,12 @@ async function applySource(path, label){
     body: JSON.stringify({path: target})
   });
   rememberPath(data.source || target);
-  selected = 0; visibleRows = [];
+  selected = 0; visibleRows = []; expandedStage = null;
   snapshotFiles(data);
-  if(data.files && data.files['tasks.json']){
-    lastStamp = stampOf(data.files);
-    install(data.files, (label || '已载入') + ' ' + (data.source || target));
+  if(data.snapshot){
+    const payload = {__snapshot:data.snapshot};
+    lastStamp = stampOf(payload);
+    install(payload, (label || '已载入') + ' ' + (data.source || target));
     closeLoad();
     return true;
   }
@@ -515,22 +658,30 @@ async function loadFromPath(){
   const input = $('load-path');
   await applySource(input ? input.value : '', '已载入所选目录');
 }
-async function loadProject(){ await guarded(async()=>{
-  if(isLocalFile()) throw Error(localFileHint());
+async function loadProject(){
+  // 面板和会话扫描不能排在慢轮询/目录对话框之后；关闭操作始终独立。
   openLoad();
   status('正在读取 Codex 会话…');
-  await refreshSessions();
-  status('选择 harness 目录或一条 Codex 会话');
-});}
+  try{
+    const catalog = await refreshSessions();
+    if(catalog && !loadDrawer()?.hidden) status('选择一条 Codex 会话，或手动指定 harness 目录');
+  }catch(e){ status('读取会话失败：' + (e.message || e), true); }
+}
 async function pullLive(){
   if(isLocalFile()) throw Error(localFileHint());
   const data = await api('/api/snapshot');
   if(data.last_source) noteLastSource(data.last_source);
   if(data.source) rememberPath(data.source);
-  return snapshotFiles(data);
+  const payload = snapshotFiles(data);
+  return {payload, data};
 }
 
 function stampOf(texts){
+  if(texts && texts.__snapshot){
+    const s=texts.__snapshot;
+    if(s.revision && typeof s.revision === 'object') return JSON.stringify(s.revision);
+    return JSON.stringify([s.version,s.updated_at,s.task_count,s.evidence_count,s.review_count,s.progress_count]);
+  }
   return ['tasks.json','evidence.jsonl','reviews.jsonl','progress.txt','board.json']
     .map(n => (texts && texts[n]) ? texts[n] : '').join('\u0001');
 }
@@ -540,8 +691,9 @@ let pollTimer = 0;
 function startPoll(){
   if(isLocalFile()) return;
   const tick = () => guarded(async()=>{
-    const texts = await pullLive();
-    if(!texts || !texts['tasks.json']) return;
+    const live = await pullLive();
+    const texts = live && live.payload;
+    if(!texts || !texts.__snapshot) return;
     const stamp = stampOf(texts);
     if(stamp === lastStamp) return;
     lastStamp = stamp;
@@ -558,10 +710,10 @@ async function bootstrapSource(){
     const snap = await api('/api/snapshot');
     if(snap && snap.last_source) noteLastSource(snap.last_source);
     if(snap && snap.source) rememberPath(snap.source);
-    snapshotFiles(snap);
-    if(snap && snap.files && snap.files['tasks.json']){
-      lastStamp = stampOf(snap.files);
-      install(snap.files, '已载入 ' + (snap.source || '任务目录'));
+    const bootPayload = snapshotFiles(snap);
+    if(bootPayload){
+      lastStamp = stampOf(bootPayload);
+      install(bootPayload, '已载入 ' + (snap.source || '任务目录'));
       return;
     }
     openLoad(true);
@@ -574,22 +726,23 @@ async function bootstrapSource(){
     }
     status('选择 harness 目录或一条 Codex 会话');
   }catch(e){
-    openLoad(true);
-    status('读取会话失败：' + ((e && e.message) || e), true);
+    reportError(e, '读取会话失败');
+    if(!(e && e.shown)) openLoad(true);
   }
 }
 async function refreshProject(){ await guarded(async()=>{
   try{
-    const texts = await pullLive();
+    const live = await pullLive();
+    const texts = live && live.payload;
     if(!texts){
-      if(model.tasks.tasks.length){ status('刷新失败：未找到 tasks.json，已保留上次任务', true); return; }
+      if(model.tasks.tasks.length){ status('刷新失败：未找到 harness.db，已保留上次任务', true); return; }
       showEmpty('尚未编排任务');
       openLoad();
       return;
     }
     lastStamp = stampOf(texts);
     install(texts, '已刷新 ' + (selectedPath || '任务目录'));
-  }catch(e){ status('刷新失败：' + e.message + '，已保留上次任务', true); }
+  }catch(e){ if(!(e && e.shown)) reportError(e, '刷新失败'); }
 });}
 function legacyCopy(text){
   const ta = document.createElement('textarea');
@@ -618,11 +771,11 @@ async function copyCmd(){
 }
 $('load').onclick = loadProject;
 $('refresh').onclick = refreshProject;
-$('copy').onclick = copyCmd;
+if($('copy')) $('copy').onclick = copyCmd;
 if($('load-close')) $('load-close').onclick = closeLoad;
 if($('load-browse')) $('load-browse').onclick = () => guarded(browseDir);
 if($('load-path-go')) $('load-path-go').onclick = () => guarded(loadFromPath);
-if($('load-refresh-sess')) $('load-refresh-sess').onclick = () => guarded(refreshSessions);
+if($('load-refresh-sess')) $('load-refresh-sess').onclick = loadProject;
 if($('load-q')) $('load-q').addEventListener('input', renderLoadList);
 if($('load-harness-only')) $('load-harness-only').addEventListener('change', renderLoadList);
 if($('load-path')) $('load-path').addEventListener('keydown', e=>{
@@ -633,6 +786,13 @@ if(loadEl) loadEl.addEventListener('click', e=>{
   const t = e.target;
   if(t && t.getAttribute && t.getAttribute('data-close-load')) closeLoad();
 });
+const errEl = errorDialog();
+if(errEl) errEl.addEventListener('click', e=>{
+  const t = e.target;
+  if(t && t.getAttribute && t.getAttribute('data-close-error')) closeErrorDialog();
+});
+if($('error-close')) $('error-close').addEventListener('click', closeErrorDialog);
+if($('status')) $('status').addEventListener('click', ()=>{ if($('status')?.classList?.contains?.('has-detail') || errorState.detail) reopenErrorDialog(); });
 $('search').addEventListener('input', render);
 $('sort').addEventListener('change', e=>{ sortBy = e.target.value; render(); });
 $('rail-nav').addEventListener('click', e=>{
@@ -648,13 +808,24 @@ $('filter-chip').addEventListener('click', e=>{
   render();
 });
 function pickRow(e){
+  const stage = e.target?.closest ? e.target.closest('[data-stage-toggle]') : null;
+  if(stage){
+    const name = stage.dataset.stageToggle;
+    if(!visibleRows.some(t=>waveOf(t) === name)) return;
+    expandedStage = expandedStage === name ? null : name;
+    render();
+    const index = [...groupedRows(visibleRows).keys()].indexOf(name);
+    $('stage-toggle-' + index)?.focus();
+    return;
+  }
   const item = e.target && e.target.closest ? e.target.closest('[data-i]') : null;
   if(!item) return;
   selected = Number(item.dataset.i);
-  const audit = e.target.closest('[data-audit]');
-  if(audit) eventFilter = audit.dataset.audit;
+  const action = e.target.closest('[data-action]');
+  if(action) eventFilter = 'both';
   render();
-  if(audit) openEvents();
+  if(action?.dataset.action === 'events') openEvents();
+  if(action?.dataset.action === 'trajectory') setTab('trajectory');
 }
 $('view-tabs').addEventListener('click', e=>{
   const b = e.target.closest ? e.target.closest('[data-tab]') : null;
@@ -675,10 +846,16 @@ if(evDrawer) evDrawer.addEventListener('click', e=>{
   const t = e.target;
   if(t && t.getAttribute && t.getAttribute('data-close-drawer')) closeEvents();
 });
+function moveCurrent(delta){
+  if(!visibleRows.length) return;
+  selected = Math.max(0, Math.min(visibleRows.length - 1, selected + delta));
+  expandedStage = waveOf(visibleRows[selected]);
+  render();
+}
 document.addEventListener('keydown', e=>{
-  if(e.key === 'Escape'){ closeEvents(); closeLoad(); return; }
+  if(e.key === 'Escape'){ if(errorDialog() && !errorDialog().hidden){ closeErrorDialog(); return; } closeEvents(); closeLoad(); return; }
   if(e.key === 'Tab'){
-    const drawer = !$('load-drawer')?.hidden ? $('load-drawer') : !$('events-drawer')?.hidden ? $('events-drawer') : null;
+    const drawer = (errorDialog() && !errorDialog().hidden) ? errorDialog() : !$('load-drawer')?.hidden ? $('load-drawer') : !$('events-drawer')?.hidden ? $('events-drawer') : null;
     if(drawer){
       const focusable = [...drawer.querySelectorAll('button:not(:disabled),input:not(:disabled),select,summary,[tabindex="0"]')];
       const first = focusable[0], last = focusable.at(-1);
@@ -690,8 +867,8 @@ document.addEventListener('keydown', e=>{
   if(e.ctrlKey || e.metaKey || e.altKey) return;
   if(e.key === 'l' || e.key === 'L'){ e.preventDefault(); loadProject(); }
   if(e.key === 'r' || e.key === 'R'){ e.preventDefault(); refreshProject(); }
-  if(e.key === 'j' || e.key === 'J' || e.key === 'ArrowDown'){ e.preventDefault(); selected++; render(); }
-  if(e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp'){ e.preventDefault(); selected = Math.max(0, selected - 1); render(); }
+  if(e.key === 'j' || e.key === 'J' || e.key === 'ArrowDown'){ e.preventDefault(); moveCurrent(1); }
+  if(e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp'){ e.preventDefault(); moveCurrent(-1); }
   if(e.key === '/'){ e.preventDefault(); $('search').focus(); }
 });
 try{ lastSource = localStorage.getItem('task-harness-last-source') || ''; }catch(e){}

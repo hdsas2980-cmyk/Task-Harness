@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Loopback board window",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

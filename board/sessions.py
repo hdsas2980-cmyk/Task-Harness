@@ -3,6 +3,7 @@
 """Read Codex session jsonl and map cwd -> harness directory. Read-only."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 from datetime import datetime, timezone
@@ -12,12 +13,28 @@ MAX_FIRST_LINE = 256 * 1024
 MAX_TAIL = 64 * 1024
 BACKUP_DIR = "__backups__"
 
+HERE = Path(__file__).resolve().parent
+
+def _load_harness_db():
+    for path in (HERE / "harness_db.py", HERE.parent / "harness_db.py"):
+        if path.is_file():
+            spec = importlib.util.spec_from_file_location("task_harness_db", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+    raise FileNotFoundError("缺少 harness_db.py")
+
+
+_dbmod = _load_harness_db()
+
+
 
 def sessions_dir() -> Path:
     env = os.environ.get("CODEX_SESSIONS_DIR")
     if env:
         return Path(env).expanduser()
-    return Path.home() / ".codex" / "sessions"
+    home = os.environ.get("CODEX_HOME")
+    return (Path(home).expanduser() if home else Path.home() / ".codex") / "sessions"
 
 
 def resolve_source(project: Path, must_exist: bool = True) -> Path:
@@ -33,7 +50,7 @@ def resolve_source(project: Path, must_exist: bool = True) -> Path:
     if target.name == ".harness":
         return target
     nested = target / ".harness"
-    if (nested / "tasks.json").is_file() or not (target / "tasks.json").is_file():
+    if (nested / "harness.db").is_file() or not (target / "harness.db").is_file():
         return nested
     return target
 
@@ -79,6 +96,8 @@ def parse_session_meta(path: Path) -> dict | None:
         meta = dict(payload)
     elif payload is not None and payload.get("cwd"):
         meta = dict(payload)
+    elif record.get("cwd") and (record.get("id") or record.get("session_id")) and not record.get("type"):
+        meta = dict(record)
     else:
         return None
     if not meta.get("id") and meta.get("session_id"):
@@ -171,28 +190,21 @@ def probe_harness(cwd: str) -> dict:
     except ValueError:
         return info
     info["source"] = str(source)
-    tasks = source / "tasks.json"
-    if tasks.is_file():
-        info["has_harness"] = True
-        info["tasks_file"] = str(tasks)
-        name, count = _task_meta(tasks)
-        info["project_name"] = name
-        info["task_count"] = count
-    return info
-
-
-def _task_meta(tasks_file: Path) -> tuple[str | None, int | None]:
+    db = source / "harness.db"
+    if not db.is_file():
+        return info
+    info["has_harness"] = True
+    info["tasks_file"] = str(db)
     try:
-        data = json.loads(tasks_file.read_text(encoding="utf-8-sig"))
-    except Exception:
-        return None, None
-    if not isinstance(data, dict):
-        return None, None
-    name = data.get("project")
-    tasks = data.get("tasks")
-    count = len(tasks) if isinstance(tasks, list) else None
-    return (str(name) if name else None), count
-
+        with _dbmod.HarnessDB(db, create=False) as handle:
+            snap = handle.read_snapshot()
+        meta = snap.get("meta") if isinstance(snap.get("meta"), dict) else {}
+        info["project_name"] = snap.get("project") or meta.get("project")
+        info["task_count"] = int((snap.get("counts") or {}).get("tasks") or 0)
+    except (OSError, ValueError):
+        info["project_name"] = None
+        info["task_count"] = None
+    return info
 
 def _iso_mtime(path: Path) -> str:
     try:

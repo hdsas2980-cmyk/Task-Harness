@@ -478,31 +478,96 @@ nav button[aria-current=page] svg{color:var(--st, var(--ink))}
 .event .badge.bad{color:var(--st-blocked);border-color:color-mix(in oklch,var(--st-blocked) 45%,var(--line))}
 .event .badge.miss{color:var(--faint)}
 
-/* 原字段中文视图：卡片内状态阶段与审计入口，所有抽屉可独立关闭。 */
-[hidden]{display:none !important}
-.cards{display:block;overflow:auto}
-.task-group{margin-bottom:20px}
-.group-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 0;margin-bottom:8px}
-.group-head h2{font-size:14px;margin:0}.group-head span{font-size:12px;color:var(--muted)}
-.tcard{margin-bottom:8px}.task-select{border:0;background:none;text-align:left;padding:0;font-weight:600;font-size:14px;color:var(--ink);cursor:pointer}
-.task-reason,.task-next{margin:5px 0;font-size:12px;color:var(--muted)}
-.card-footer{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
-.stage-progress{display:flex;gap:5px;margin-bottom:10px}.stage-progress span{flex:1;font-size:11px;color:var(--muted)}
-.stage-progress i{display:block;height:4px;background:var(--line);margin-bottom:4px;border-radius:2px}
-.stage-progress .current{color:var(--ink);font-weight:600}.stage-progress .current i{background:var(--accent)}
-.card-audits{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;font-size:12px}
-.card-audits button{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:4px 10px;cursor:pointer;color:var(--ink)}
-.card-audits span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
-#trace,#progress{overflow:auto;padding:16px;min-height:0}.trace-head h2{margin:0;font-size:16px}.trace-head p{color:var(--muted);font-size:12px}
-.trace-list{list-style:none;padding:0 0 0 14px;border-left:2px solid var(--line)}.trace-list li{padding:12px 0;border-bottom:1px solid var(--line)}
-.trace-list li>div{display:flex;justify-content:space-between;gap:8px}.trace-list time,small{font-size:11px;color:var(--muted)}
-.trace-list pre,.progress-entry pre,.raw-progress pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 var(--sans)}
-.progress-entry{border-bottom:1px solid var(--line);padding:12px 0}.progress-entry summary{cursor:pointer}.progress-entry summary span{font-weight:600}.progress-entry time{margin-left:12px;font-size:11px;color:var(--muted)}
-.progress-entry summary p{margin:6px 0;font-size:12px;color:var(--muted)}.raw-progress{margin-top:16px}
-.event-summary{font-size:14px;line-height:1.6}.event details{margin-top:12px}.event details summary{cursor:pointer;color:var(--muted);font-size:12px;margin-bottom:8px}
-#contract-error{white-space:pre-wrap;overflow:auto;max-height:35vh;padding:12px;border:1px solid var(--line);color:var(--danger,var(--ink));background:var(--surface);font:12px/1.6 var(--sans)}
-button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* r2: preserve source loading; task cards own progress and audit actions. */
+[hidden]{display:none!important}
+.cards{display:block;padding:4px 16px 20px}
+.stage-group{margin:0 0 24px}
+.stage-head{display:flex;align-items:center;gap:14px;padding:8px 0 12px;flex-wrap:wrap}
+.stage-head h3{font-size:14px;margin:0;color:var(--ink)}
+.stage-head>span,.group-note{font-size:12px;color:var(--muted)}
+.stage-progress{width:110px;height:4px;background:var(--line);border-radius:3px;overflow:hidden}
+.stage-progress i{display:block;height:100%;background:var(--st-passed)}
+.group-note{margin:0 0 12px}
+.stage-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:stretch}
+.tcard{padding:16px;background:var(--surface);border-color:var(--line);box-shadow:inset 3px 0 0 var(--st);gap:9px}
+.tcard:hover{background:var(--surface-2)}
+.tcard[aria-selected="true"]{background:var(--surface-2);border-color:var(--st);box-shadow:inset 3px 0 0 var(--st)}
+.tcard .id{overflow-wrap:anywhere;font-size:12px;line-height:1.45}
+.tcard .desc{-webkit-line-clamp:3;font-size:13px;line-height:1.6}
+.tcard .meta{overflow-wrap:anywhere}
+.card-bottom{margin-top:auto;padding-top:14px}
+.card-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;color:var(--muted);font-size:10px}
+.card-progress span{white-space:nowrap}
+.card-progress i{display:block;height:4px;border-radius:2px;background:var(--line);margin-bottom:5px}
+.card-progress .reached i{background:var(--st)}
+.audit-brief{font-size:11.5px;color:var(--ink-2);margin:12px 0 9px}
+.card-actions{display:flex;align-items:center;justify-content:space-between;gap:6px;border-top:1px solid var(--line);padding-top:10px;flex-wrap:wrap}
+.card-actions .btn{height:32px;font-size:12px}
+.trace-link{color:var(--muted);font-size:12px;padding:6px 0}
+.trace-link:hover{color:var(--ink);text-decoration:underline}
+.card-warning{color:var(--danger);font-size:11.5px;overflow-wrap:anywhere;margin:4px 0}
+.project-context{margin:0 16px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;color:var(--muted)}
+.project-context summary{cursor:pointer}
+.audit-summary{padding:14px 16px;background:var(--surface-2);display:flex;flex-direction:column;gap:5px;flex:none;border-bottom:1px solid var(--line)}
+.audit-summary small{color:var(--muted);font-size:11.5px}
+.event-summary{font-size:13px;line-height:1.65;overflow-wrap:anywhere;margin:10px 0}
+.event-source,.review-link{color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.event-details{margin-top:10px}
+.event-details summary{cursor:pointer;color:var(--ink-2);font-size:12px;margin-bottom:8px}
+.event .kv code{white-space:pre-wrap;overflow-wrap:anywhere}
+.trajectory-tools{display:flex;align-items:center;gap:12px;padding:16px;flex:none;border-bottom:1px solid var(--line)}
+.trajectory-tools select{min-width:0;max-width:700px;flex:1;padding:7px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:12px}
+.trajectory-note{margin:0;padding:12px 16px;color:var(--muted);font-size:12px;flex:none}
+.trajectory-body{min-height:0;overflow:auto;padding:0 24px 24px;flex:1}
+.trajectory-current{padding:16px;border:1px solid var(--line);border-radius:8px;margin-bottom:22px;max-width:900px;background:var(--surface-2)}
+.trajectory-current>span{font-size:11px;color:var(--muted)}
+.trajectory-current h3{margin:6px 0;overflow-wrap:anywhere}
+.trajectory-current p{margin:6px 0;font-size:12px}
+.audit-timeline{list-style:none;padding:0 0 0 22px;margin:0 0 0 7px;border-left:1px solid var(--line-2);max-width:900px}
+.audit-timeline>li{position:relative;margin-bottom:24px}
+.audit-timeline>li:before{content:"";position:absolute;left:-27px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--muted);border:1px solid var(--surface)}
+.trace-time{font:11px/1.5 var(--mono);color:var(--muted);margin-bottom:8px}
+.audit-timeline .event{border:1px solid var(--line);border-radius:8px;padding:16px}
+.build-id{font:10px/1 var(--mono);color:var(--muted);white-space:nowrap}
+@media(max-width:720px){.stage-cards{grid-template-columns:minmax(0,1fr)}.tools{flex-wrap:wrap}.build-id{display:none}.top .path{max-width:100%}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 
+
+/* 进度日志：先给结论，再看最近记录，最后展开原文。 */
+.trajectory-tools{justify-content:space-between;flex-wrap:wrap}
+.trajectory-tools b{font-size:13px;color:var(--ink)}
+.trajectory-tools span{font-size:12px;color:var(--muted)}
+#progress-log{min-height:0;overflow:auto;padding:0 16px 20px}
+.log-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0;border-bottom:1px solid var(--line)}
+.log-summary>div{display:flex;align-items:baseline;gap:10px}.log-summary>div span,.log-summary small{color:var(--muted);font-size:11.5px}.log-summary small{flex-basis:100%}
+.log-signal{font-size:12px}.log-signal.ok{color:var(--st-passed)}.log-signal.warn{color:var(--danger)}.log-signal.muted{color:var(--muted)}
+.progress-list{list-style:none;margin:0;padding:12px 0}.progress-list li{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line)}
+.log-kind{font-size:11px;color:var(--muted)}.log-通过 .log-kind{color:var(--st-passed)}.log-异常 .log-kind{color:var(--danger)}.log-门禁 .log-kind{color:var(--accent)}
+.log-line{font:12px/1.55 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}.log-no{font-size:10px;color:var(--faint);white-space:nowrap}
+.raw-log{border-top:1px solid var(--line);padding-top:12px}.raw-log summary{cursor:pointer;color:var(--ink-2);font-size:12px}.raw-log pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11.5px/1.6 var(--mono);color:var(--muted);margin:12px 0 0}
+.log-head p{margin:4px 0 0;font-size:11.5px;color:var(--muted)}
+
+
+/* 本次仅增加：互斥阶段折叠、顶部键盘说明、已通过筛选。 */
+.stage-toggle{display:inline-flex;align-items:center;gap:8px;padding:0;font:inherit;font-weight:inherit;color:inherit;text-align:left}
+.stage-arrow{display:inline-block;width:12px;font-size:18px;line-height:1;transform:rotate(0deg)}
+.stage-toggle[aria-expanded="true"] .stage-arrow{transform:rotate(90deg)}
+.top .keys{display:block;position:relative;flex:none;padding:0;border:0}
+.top-keys>summary{list-style:none;cursor:pointer}.top-keys>summary::-webkit-details-marker{display:none}
+.keys-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:220px;padding:14px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+nav button[data-filter="passed"]{--st:var(--st-passed)}
+
+
+/* 错误改弹窗：不占主区 tabs 上方。 */
+.error-dialog[hidden]{display:none}
+.error-dialog{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px}
+.error-dialog .drawer-mask{position:absolute;inset:0;background:oklch(20% 0.01 80 / .45)}
+.error-panel{position:relative;z-index:1;width:min(720px,96vw);max-height:min(78vh,680px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:0 24px 64px oklch(20% 0.01 80 / .22);display:flex;flex-direction:column;min-height:0}
+.error-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
+.error-head h2{margin:0;font:500 14px/1.2 var(--sans);color:var(--danger)}
+.error-sub{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.error-body{margin:0;padding:14px 16px 16px;flex:1;min-height:0;overflow:auto;font:12px/1.55 var(--mono);color:var(--ink-2);white-space:pre-wrap;word-break:break-word}
+.status.has-detail{cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 </style>
 </head>
 <body>
@@ -517,43 +582,46 @@ button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outli
       <button type="button" data-filter="blocked"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5M12 16h.01"/></svg><span class="nav-txt">已阻塞<em>卡住了，先解开</em></span><b id="c-blocked">0</b></button>
       <button type="button" data-filter="evidence_ready"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg><span class="nav-txt">待评审<em>验过才算完成</em></span><b id="c-evidence_ready">0</b></button>
       <button type="button" data-filter="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3.5l2.5-6 3.5 12 2.5-6h6"/></svg><span class="nav-txt">进行中<em>正在做，还没交</em></span><b id="c-active">0</b></button>
+      <button type="button" data-filter="passed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m7.5 12 3 3 6-6"/></svg><span class="nav-txt">已通过<em>查看已通过任务</em></span><b id="c-passed">0</b></button>
       <button type="button" data-filter="eligible"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg><span class="nav-txt">可推进<em>现在就能开工</em></span><b id="c-eligible">0</b></button>
     </nav>
     <section class="rail-detail" aria-label="当前行">
       <h2>当前行</h2>
-      <div class="detail" id="detail"></div><button class="btn" id="copy" type="button">复制当前验证命令</button>
+      <div class="detail" id="detail"></div>
     </section>
-    <div class="keys">
-      <h2>键盘</h2>
-      <p><span>载入 / 刷新</span><span><kbd>L</kbd> <kbd>R</kbd></span></p>
-      <p><span>上下行</span><span><kbd>J</kbd> <kbd>K</kbd></span></p>
-      <p><span>搜索</span><span><kbd>/</kbd></span></p>
-    </div>
   </aside>
 
   <header class="top">
-    <div class="path"><b id="proj-name">—</b><span id="proj-rev">修订 —</span></div>
+    <div class="path"><b id="proj-name">—</b><span id="proj-rev">rev —</span></div>
     <div class="grow"></div>
+    <details class="keys top-keys">
+      <summary class="btn">键盘操作</summary>
+      <div class="keys-panel">
+        <h2>键盘</h2>
+        <p><span>载入 / 刷新</span><span><kbd>L</kbd> <kbd>R</kbd></span></p>
+        <p><span>上下行</span><span><kbd>J</kbd> <kbd>K</kbd></span></p>
+        <p><span>搜索</span><span><kbd>/</kbd></span></p>
+      </div>
+    </details>
     <label class="search-wrap">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.2"/><path d="M20 20l-3.7-3.7"/></svg>
       <input class="search" id="search" type="search" aria-label="搜索任务" placeholder="搜索编号、描述、验证命令">
     </label>
-
     <button class="btn btn-solid" id="load" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 20h15"/></svg>载入任务 <kbd>L</kbd></button>
     <button class="btn" id="refresh" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1M20.5 4.2v5h-5"/></svg>刷新任务 <kbd>R</kbd></button>
   </header>
 
   <main class="main">
-    <pre id="contract-error" role="alert" hidden></pre>
     <div class="tabs" id="view-tabs" role="tablist" aria-label="任务视图切换">
       <button type="button" role="tab" id="tab-btn-list" data-tab="list" aria-controls="tab-list" aria-selected="true">任务列表</button>
-      <button type="button" role="tab" id="tab-btn-trace" data-tab="trace" aria-controls="tab-trace" aria-selected="false">任务轨迹</button>
+      <button type="button" role="tab" id="tab-btn-trajectory" data-tab="trajectory" aria-controls="tab-trajectory" aria-selected="false">任务轨迹</button>
       <button type="button" role="tab" id="tab-btn-log" data-tab="log" aria-controls="tab-log" aria-selected="false">进度日志</button>
     </div>
 
     <section class="panel" id="tab-list" role="tabpanel" aria-labelledby="tab-btn-list">
       <div class="tools">
         <span class="filter-chip" id="filter-chip" hidden></span>
+        <span class="hint">按阶段分组 · 卡内查看证据与评审</span>
         <div class="grow"></div>
         <label class="sort-wrap">排序
           <select id="sort" aria-label="排序方式">
@@ -564,21 +632,25 @@ button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outli
         </label>
         <span class="hint" id="count"></span>
       </div>
+      <details id="map-card" class="project-context" hidden><summary>项目背景（可选 board.json）</summary><p id="map-where"></p><div id="map-next"></div></details>
       <div class="cards" id="tasks"></div>
     </section>
 
-    <section class="panel" id="tab-trace" role="tabpanel" aria-labelledby="tab-btn-trace" hidden>
-      <div id="trace"></div>
+    <section class="panel trajectory-panel" id="tab-trajectory" role="tabpanel" aria-labelledby="tab-btn-trajectory" hidden>
+      <div class="trajectory-tools"><b>当前行的任务轨迹</b><span>轨迹会跟随左侧当前行和任务列表中的选中卡片自动更新。</span></div>
+      <p class="trajectory-note">只展示真实证据与评审。有效时间按先后排列；缺失时间的记录置后，不推测发生顺序。叙事背景请看进度日志。</p>
+      <div id="trajectory" class="trajectory-body"></div>
     </section>
 
     <section class="panel log-panel" id="tab-log" role="tabpanel" aria-labelledby="tab-btn-log" hidden>
-      <div class="log-head"><h2>进度日志</h2></div>
-      <div id="progress"></div>
+      <div class="log-head"><h2>进度日志</h2><p>查看最近进展、异常和门禁信号；完整原文可展开。</p></div>
+      <div id="progress-log"></div>
     </section>
   </main>
 
   <footer class="statusbar">
     <div class="status" id="status" role="status" aria-live="polite"></div>
+    <span class="build-id">看板 UI 2026.09.12-r2</span>
     <span class="ro" id="source-hint">只读，不写任务真相源</span>
   </footer>
 </div>
@@ -593,6 +665,7 @@ button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outli
       </div>
       <button class="btn-icon" id="events-close" type="button" aria-label="关闭">×</button>
     </div>
+    <div id="events-summary" class="audit-summary"></div>
     <div class="event-filters" id="event-filters">
       <button type="button" data-evf="both" aria-current="true">证据与评审</button>
       <button type="button" data-evf="e">证据</button>
@@ -608,31 +681,45 @@ button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outli
     <div class="load-head">
       <div>
         <h2 id="load-title">载入任务</h2>
-        <p>指定任务文件目录，或从本机 Codex 会话选择工作目录。</p>
+        <p>指定任务目录，或从本机 Codex 会话选择项目目录。</p>
       </div>
       <button class="btn-icon" id="load-close" type="button" aria-label="关闭">×</button>
     </div>
     <div class="load-body">
       <section class="load-sec">
-        <h3>1 指定任务文件目录</h3>
+        <h3>1 指定任务目录</h3>
         <div class="path-row">
-          <input id="load-path" type="text" spellcheck="false" placeholder="项目根或 .harness 的绝对路径">
+          <input id="load-path" type="text" spellcheck="false" placeholder="项目根目录或 .harness 目录的绝对路径">
           <button class="btn" id="load-browse" type="button">浏览</button>
           <button class="btn btn-solid" id="load-path-go" type="button">载入</button>
         </div>
         <p class="load-last" id="load-last">没有上次路径</p>
       </section>
       <section class="load-sec">
-        <h3>2 从 Codex 会话选择</h3>
+        <h3>2 从 Codex 会话中选择</h3>
         <div class="load-tools">
           <input id="load-q" type="search" placeholder="搜索标题、路径、会话编号">
           <label><input id="load-harness-only" type="checkbox"> 仅已有看板</label>
           <button class="btn" id="load-refresh-sess" type="button">刷新会话</button>
         </div>
+        <p class="load-last" id="load-session-status" role="status" aria-live="polite"></p>
         <div class="load-list" id="load-list"></div>
       </section>
     </div>
   </aside>
+</div>
+<div class="error-dialog" id="error-dialog" hidden>
+  <div class="drawer-mask" data-close-error="1"></div>
+  <section class="error-panel" role="alertdialog" aria-modal="true" aria-labelledby="error-title" aria-describedby="contract-error">
+    <div class="error-head">
+      <div>
+        <h2 id="error-title">出错</h2>
+        <p class="error-sub" id="error-sub"></p>
+      </div>
+      <button class="btn-icon" id="error-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <pre class="error-body" id="contract-error" role="alert" hidden></pre>
+  </section>
 </div>
 <script>
 window.addEventListener('error', function(e){

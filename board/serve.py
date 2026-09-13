@@ -30,8 +30,20 @@ _checker_spec = importlib.util.spec_from_file_location("task_harness_language", 
 _language = importlib.util.module_from_spec(_checker_spec)
 _checker_spec.loader.exec_module(_language)
 
+def _load_harness_db():
+    for path in (HERE / "harness_db.py", HERE.parent / "harness_db.py"):
+        if path.is_file():
+            spec = importlib.util.spec_from_file_location("task_harness_db", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+    raise FileNotFoundError("缺少 harness_db.py")
+
+
+_dbmod = _load_harness_db()
+
+
 STATIC = HERE / "static"
-OPTIONAL = ("evidence.jsonl", "reviews.jsonl", "progress.txt", "board.json")
 PORT_MIN, PORT_MAX = 8765, 8799
 SOURCE_LOCK = threading.Lock()
 PICK_LOCK = threading.Lock()
@@ -85,31 +97,39 @@ def save_last_source(source: Path) -> None:
 
 
 def snapshot(source: Path | None) -> dict:
-    files = {}
     read_errors = []
+    structured = None
+    extra = {}
     if source is not None:
-        for name in ("tasks.json", *OPTIONAL):
-            fp = source / name
-            if fp.is_file():
-                try:
-                    files[name] = fp.read_text(encoding="utf-8-sig")
-                except (OSError, UnicodeError) as exc:
-                    read_errors.append(f"{name}：无法读取 UTF-8 文件（{exc}）")
-    checked_files = dict(files)
-    # 只检测禁用文件是否存在，绝不读取翻译内容。
-    if source is not None and (source / "board.i18n.json").exists():
-        checked_files["board.i18n.json"] = ""
+        db_path = source / "harness.db"
+        if not db_path.is_file():
+            read_errors.append(f"未初始化 {db_path}，禁止回退 JSON/JSONL/TXT")
+        else:
+            try:
+                with _dbmod.HarnessDB(db_path, create=False) as db:
+                    structured = db.read_snapshot()
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                read_errors.append(f"harness.db：无法读取 SQLite 数据库（{exc}）")
+        if (source / "board.i18n.json").exists():
+            extra["board.i18n.json"] = ""
     try:
-        contract = _language.validate_files(checked_files) if source is not None else None
+        if structured is not None:
+            contract = _language.validate_snapshot(structured, extra_files=extra or None)
+        elif source is not None:
+            contract = {"errors": list(read_errors), "counts": {"tasks": 0, "evidence": 0, "reviews": 0}}
+        else:
+            contract = None
     except RecursionError:
-        contract = {"errors": ["任务文件嵌套过深，无法检查"], "counts": {}}
-    if contract is not None:
-        contract["errors"] = read_errors + contract["errors"]
+        contract = {"errors": ["任务数据嵌套过深，无法检查"], "counts": {}}
+    if contract is not None and read_errors:
+        seen = set(contract.get("errors") or [])
+        contract["errors"] = list(read_errors) + [err for err in (contract.get("errors") or []) if err not in seen]
     return {
         "source": str(source) if source is not None else None,
-        "files": files,
+        "files": {},
         "contract": contract,
         "last_source": load_last_source(),
+        "snapshot": structured,
     }
 
 
@@ -199,26 +219,6 @@ class Handler(BaseHTTPRequestHandler):
             with SOURCE_LOCK:
                 source = self.source
             self._send_json(list_session_catalog(current_source=source))
-            return
-        name = path.lstrip("/")
-        allowed = ("tasks.json",) + OPTIONAL
-        if name in allowed:
-            with SOURCE_LOCK:
-                source = self.source
-            if source is None:
-                self.send_error(404, "Not found")
-                return
-            fp = source / name
-            if not fp.is_file():
-                self.send_error(404, "Not found")
-                return
-            if name.endswith(".json"):
-                ctype = "application/json; charset=utf-8"
-            elif name.endswith(".jsonl"):
-                ctype = "application/octet-stream"
-            else:
-                ctype = "text/plain; charset=utf-8"
-            self._send_file(fp, ctype)
             return
         self.send_error(404, "Not found")
 
@@ -331,7 +331,7 @@ def serve(project: Path | None, port: int = 0, open_browser: bool = True) -> Thr
         emit("当前路径 未绑定（页面里指定目录或选会话）")
     else:
         emit("当前路径 " + str(source))
-    emit("只读，不写 tasks.json。Ctrl+C 停止。")
+    emit("只读 harness.db。Ctrl+C 停止。")
     if open_browser:
         try:
             webbrowser.open(url)
