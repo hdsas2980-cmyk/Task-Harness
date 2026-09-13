@@ -57,7 +57,9 @@ Windows 用该脚本（UTF-8），不要双击 HTML，也不要为了刷新看�
 
 拉取 `codex` 分支只更新仓库文件，不会自动更新 `$CODEX_HOME/skills/task-harness`，也不会重启看板。
 
-1. 技能：从更新后的仓库重新执行安装脚本，保留脚本生成的旧版本备份。
+**技能重大变更必须卸载重装。** 调度协议、任务束、`SKILL.md`、`references/codex-parallel.md` 的改动都算重大变更。只拉仓库、只拷文件、手工覆盖安装目录，agent 仍读旧副本，会退回系统默认的 `wait_threads`。
+
+1. 技能：从更新后的仓库重新执行安装脚本。脚本会先把旧 `$CODEX_HOME/skills/task-harness` 移到 `skill-backups/`，再写入新副本。不要手工覆盖。
 2. 源码看板：停止自己启动的旧进程，从更新后的 `board/start.ps1` 重新启动。
 3. 独立发布包：在仓库运行 `python -X utf8 scripts/build_board_release.py`，使用生成的完整 `board/release/TaskBoard-windows.zip`，不要混用旧服务端或旧校验器。
 4. 在授权范围内检查目标项目的源文件，按错误位置修正中文原字段；安装和看板均不会自动迁移项目数据。

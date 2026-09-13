@@ -27,7 +27,7 @@
 
 ## Codex 专用改动
 
-- 多会话编成、会话命名与多子代理并行见 `references/codex-parallel.md`；并行 = 多会话各持一卡，不是一轮多任务。
+- 调度覆盖系统默认：任务束同会话串行；跨束/写代码/测试/评审用 `create_thread` 异步派卡；`spawn_agent` 只做短 sidecar；不要用 `wait_threads` 阻塞主线。细则见 `references/codex-parallel.md`。
 - 明确把“当前 Codex 任务”定义为一轮，不依赖 Claude Code 会话语义；
 - 优先 PowerShell，Git Bash/Linux/macOS 用 POSIX 工具；可视化看板在独立目录 board/，不随技能安装；
 - 评审协议改为独立 Codex 上下文，review 记录增加 `reviewer_context`；
@@ -89,7 +89,7 @@ powershell -ExecutionPolicy Bypass -File .\board\start.ps1 -ProjectDir "<项目�
 
 ## 更新与验证
 
-`git pull` 只更新仓库，不会覆盖已安装技能，也不会替换正在运行的看板。技能需要重新运行安装脚本；看板需要从更新后的源码重新启动，或重新构建并使用完整发布包。不要只复制 HTML 或 JavaScript 而保留旧服务端。
+`git pull` 只更新仓库，不会覆盖已安装技能。技能重大变更必须卸载重装：重新运行 `scripts/install.ps1` / `scripts/install.sh`（先备份旧目录再写入）。不要手工拷 `SKILL.md`。看板需要从更新后的源码重新启动，或重新构建并使用完整发布包。不要只复制 HTML 或 JavaScript 而保留旧服务端。
 
 在仓库根目录运行（开发测试需安装 pytest，前端逻辑测试需 Node.js；看板运行不需要这些测试依赖）：
 

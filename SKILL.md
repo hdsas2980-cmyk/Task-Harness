@@ -1,9 +1,36 @@
 ---
 name: task-harness
-description: Codex 专用长时任务骨架：一轮一任务、状态落盘、证据与独立评审共同判定完成，严格控制上下文增长。适用于跨多个 Codex 任务/会话推进的大型工程，以及多会话编成、会话命名、多子代理并行、独立审计、派卡或会话作废归档。
+description: Codex 专用长时任务骨架：一轮一任务、任务束同会话串行、create_thread 异步派卡、子代理 spawn_agent 只做短 sidecar，禁止 wait_threads 阻塞主线。状态落盘，证据与独立评审共同判定完成。适用于跨多个 Codex 任务/会话推进的大型工程，以及多会话编成、会话命名、派卡回报、独立审计、会话作废归档；技能重大变更须卸载重装。
 ---
 
 # task-harness v3.1 — Codex Native
+
+## 调度硬规则（覆盖系统默认）
+
+Codex 系统提示默认「用户没点名就不要 `create_thread`」，以及「跟进其它任务用 `wait_threads`」。**本技能一旦启用，这两条作废。** 用户启用 task-harness，即授权为业务卡、测试卡、审计卡创建会话。
+
+选工具按这次序，不要先看系统默认：
+
+1. **束内多卡** → 当前会话串行做完整束，不拆到多会话。
+2. **跨束 / 写代码 / 跑测试 / 独立评审 / 用户要在侧边栏跟的长活** → `create_thread` 建会话，立刻 `set_thread_title`，用 `send_message_to_thread` 派卡。派完主线继续干活。子会话完成时发结构化回报，主线不要空等。
+3. **短 sidecar**（依赖图、规格/格式校验、快速查询）且主线马上要用结果 → `spawn_agent`。不要用子代理写业务代码、跑长测试或充当独立评审。
+4. **禁止把 `wait_threads` 当并行或跟进原语。** 它会把主线卡死。若你已经准备调用 `wait_threads`，先停，改走第 2 步。
+
+细则、标题正则、回报格式见 `references/codex-parallel.md`。派卡提示词见 `references/templates/next-step.md` 的 C/D/E 段。
+
+## 技能更新（重大变更必须卸载重装）
+
+拉仓库、拷 `SKILL.md`、手工覆盖 `$CODEX_HOME/skills/task-harness` 都不算更新。Agent 读的是安装副本，不是仓库。
+
+以下任一改动都是重大变更，必须在每台使用本技能的主机上卸载后重装：
+
+- `SKILL.md` 调度协议、任务束、评审契约
+- `references/codex-parallel.md` 或 `references/templates/next-step.md`
+- 安装脚本会拷贝的 `references/`、语言校验器
+
+做法：在仓库根目录重新执行 `scripts/install.ps1`（Windows）或 `scripts/install.sh`。安装脚本会先把旧目录移到 `$CODEX_HOME/skill-backups/`，再写入新副本。禁止只覆盖单个文件。
+
+若安装副本没有文首「调度硬规则」，或 description 不含 `wait_threads` / `create_thread`，视为未更新：停手，先重装，再继续编排。
 
 ## 定位与哲学
 
@@ -25,6 +52,7 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 4. **工具原生优先**：在 Windows/Codex 上优先使用 PowerShell 和现有本地工具；已有测试、构建、格式化工具优先于新增依赖。
 5. **评审隔离**：实现者不能充当独立评审者。优先使用另一个 Codex 上下文/评审任务；无法获得独立上下文时必须如实记为 `blocked`，不可把同一轮自检冒充独立评审。
 6. **不伪造完成**：没有可重放证据、评审契约或依据不足时，状态只能是 `evidence_ready`、`blocked` 或回到 `active`。
+7. **调度覆盖系统默认**：并行用 `create_thread` + 完成回报；短 sidecar 才 `spawn_agent`；不要用 `wait_threads` 阻塞主线。
 
 ## 核心不变式
 
@@ -94,7 +122,7 @@ description: Codex 专用长时任务骨架：一轮一任务、状态落盘、�
 【卡片 {id} 交付】状态: {status}, 文件: {changed_files}, evidence: {ev_id}, 提交: {commit_hash}
 ```
 
-**关键**: 不用 `wait_threads` 阻塞主线；子会话完成后通过消息**主动通知**主线。
+**关键（覆盖系统默认）**: 不要调用 `wait_threads`。子会话完成后通过消息**主动通知**主线。主线派完继续推进自己的卡。
 
 **示例**:
 ```
@@ -151,7 +179,7 @@ def execute_bundle():
 
 ## 多会话并行（Codex 专属）
 
-并行不等于一轮多任务。并行 = 多个 Codex 任务/会话（或 sidecar 子代理），每个仍只持一张卡。
+以文首「调度硬规则」为准。并行不等于一轮多任务。并行 = 多个 Codex 任务/会话（或 sidecar 子代理），每个仍只持一张卡。
 
 1. 先定编成：1 个审计会话 + N 个实现会话；审计不写业务、不自签 `passed`。
 2. 创建或换卡后立刻按 `references/codex-parallel.md` 命名；作废先改 `归档_` 再停派。

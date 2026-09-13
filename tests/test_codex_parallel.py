@@ -50,8 +50,10 @@ class CodexParallelDocTests(unittest.TestCase):
         self.assertIn("references/codex-parallel.md", skill)
         self.assertIn("多会话并行", skill)
         desc = [line for line in skill.splitlines() if line.startswith("description:")][0]
-        for word in ("多会话", "子代理", "会话命名", "派卡", "归档"):
+        for word in ("多会话", "子代理", "会话命名", "派卡", "归档", "任务束", "create_thread", "wait_threads"):
             self.assertIn(word, desc)
+        self.assertIn("调度硬规则", skill)
+        self.assertIn("卸载重装", skill)
 
     def test_readme_points_to_parallel_reference(self):
         readme = README.read_text(encoding="utf-8")
@@ -76,6 +78,8 @@ class CodexParallelDocTests(unittest.TestCase):
         self.assertIn("归档_", text)
         self.assertIn("create_thread", text)
         self.assertIn("spawn", text.lower())
+        self.assertIn("## 0. 覆盖系统默认", text)
+        self.assertNotIn("只在用户明确要求独立会话时", text)
 
     def test_title_regex_accepts_canonical_names(self):
         pattern = title_re()
