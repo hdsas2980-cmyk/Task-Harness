@@ -74,7 +74,7 @@ class CodexParallelDocTests(unittest.TestCase):
         ):
             self.assertIn(heading, text)
         self.assertIn("一轮仍只推进一张卡", text)
-        self.assertIn("tasks.json", text)
+        self.assertIn("harness.db", text)
         self.assertIn("归档_", text)
         self.assertIn("create_thread", text)
         self.assertIn("spawn", text.lower())

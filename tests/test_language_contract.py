@@ -1,4 +1,5 @@
 """中文契约的真实 CLI 回归；不访问用户项目或已安装技能。"""
+import importlib.util
 import json
 import os
 import re
@@ -10,6 +11,12 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts/check_task_harness_language.py"
+sys.path.insert(0, str(ROOT))
+from harness_db import convert_legacy
+
+_spec = importlib.util.spec_from_file_location("task_harness_language", CHECK)
+LANGUAGE = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(LANGUAGE)
 
 
 def valid_files():
@@ -26,7 +33,7 @@ def valid_files():
 
 
 class LanguageContractTests(unittest.TestCase):
-    def run_check(self, files, *args):
+    def run_check(self, files, *args, convert=True):
         with tempfile.TemporaryDirectory(prefix="language-test-", dir=ROOT) as tmp:
             root = Path(tmp).resolve()
             self.assertEqual(root.parent, ROOT)
@@ -34,6 +41,11 @@ class LanguageContractTests(unittest.TestCase):
             harness.mkdir()
             for name, content in files.items():
                 (harness / name).write_text(content, encoding="utf-8")
+            if convert and "--templates" not in args:
+                try:
+                    convert_legacy(harness)
+                except ValueError:
+                    pass
             return subprocess.run([sys.executable, "-X", "utf8", str(CHECK), str(root), *args],
                 capture_output=True, text=True, encoding="utf-8")
 
@@ -42,6 +54,12 @@ class LanguageContractTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn(hint, result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+
+    def assert_rejected_files(self, files, hint):
+        result = LANGUAGE.validate_files(files)
+        blob = "\n".join(result["errors"])
+        self.assertTrue(result["errors"], blob)
+        self.assertIn(hint, blob)
 
     def test_native_chinese_preserves_machine_values(self):
         result = self.run_check(valid_files())
@@ -85,7 +103,7 @@ class LanguageContractTests(unittest.TestCase):
         for data in ({}, {"tasks": {}}, [], {"project":"中文", "description":"中文", "tasks":[None]}):
             with self.subTest(data=data):
                 files = valid_files(); files["tasks.json"] = json.dumps(data)
-                self.assert_rejected(files, "tasks.json")
+                self.assert_rejected_files(files, "tasks.json")
 
     def test_readable_fields_must_be_strings_and_not_placeholders(self):
         for value in ({"中文": "text"}, ["中文"], "{{中文占位符}}", "<中文理由>"):
@@ -99,7 +117,7 @@ class LanguageContractTests(unittest.TestCase):
         for value in ("{broken", "[]", "null", '{"_comment":"说明", "task":"t-01", "summary":"English"}'):
             with self.subTest(value=value):
                 files = valid_files(); files["evidence.jsonl"] = "\n" + value
-                self.assert_rejected(files, "evidence.jsonl:2")
+                self.assert_rejected_files(files, "evidence.jsonl:2")
 
     def test_comments_are_not_counted_as_executed_records(self):
         files = valid_files()
@@ -153,6 +171,30 @@ class LanguageContractTests(unittest.TestCase):
         self.assertIn("模板", result.stdout)
         self.assertIn("证据 0", result.stdout)
 
+    def test_missing_db_does_not_fallback_to_json(self):
+        result = self.run_check(valid_files(), convert=False)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("禁止回退", result.stderr)
+        self.assertIn("harness.db", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_leftover_json_is_ignored_after_convert(self):
+        with tempfile.TemporaryDirectory(prefix="language-test-", dir=ROOT) as tmp:
+            root = Path(tmp).resolve()
+            harness = root / ".harness"
+            harness.mkdir()
+            for name, content in valid_files().items():
+                (harness / name).write_text(content, encoding="utf-8")
+            convert_legacy(harness)
+            (harness / "tasks.json").write_text(json.dumps({
+                "project": "English leftover",
+                "description": "should be ignored",
+                "tasks": [{"id": "bad", "name": "English", "desc": "English", "reason": "English", "next": "English", "status": "active"}],
+            }), encoding="utf-8")
+            result = subprocess.run([sys.executable, "-X", "utf8", str(CHECK), str(root)],
+                capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_bash_install_delivers_checker(self):
         bash = Path("C:/Program Files/Git/bin/bash.exe")
         if not bash.is_file(): self.skipTest("未安装 Git Bash")
@@ -163,6 +205,8 @@ class LanguageContractTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             installed = home / "skills/task-harness"
             self.assertEqual((installed / "scripts/check_task_harness_language.py").read_bytes(), CHECK.read_bytes())
+            self.assertTrue((installed / "harness_db.py").is_file())
+            self.assertTrue((installed / "scripts/convert_harness_json.py").is_file())
             self.assertFalse((installed / "board").exists())
 
     def test_installed_skill_delivers_checker(self):
@@ -176,6 +220,8 @@ class LanguageContractTests(unittest.TestCase):
             installed = home / "skills/task-harness"
             self.assertTrue((installed / "scripts/check_task_harness_language.py").is_file(), "安装未交付校验器")
             self.assertEqual((installed / "scripts/check_task_harness_language.py").read_bytes(), CHECK.read_bytes())
+            self.assertTrue((installed / "harness_db.py").is_file())
+            self.assertTrue((installed / "scripts/convert_harness_json.py").is_file())
             self.assertFalse((installed / "board").exists())
             checked = subprocess.run([sys.executable, "-X", "utf8", str(installed / "scripts/check_task_harness_language.py"),
                 str(installed / "references/templates"), "--templates"], capture_output=True)

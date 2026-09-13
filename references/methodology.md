@@ -13,21 +13,21 @@ Agent 的核心限制是**无状态**——每次会话都从零开始，没有�
 
 Harness 就是解决这些问题的**外部记忆系统**。
 
-## 为什么用 JSON 做任务清单？
+## 为什么用结构化记录做任务清单？
 
 这是方法论中最关键的洞察：
 
 模型倾向于自由改写 Markdown 文件——改写措辞、重组结构、删减内容。这种"过度编辑"倾向会导致任务清单逐渐失真：步骤被简化、验证条件被弱化、优先级被悄悄调整。
 
-JSON 文件被模型更谨慎对待。模型更可能只修改特定字段（如 `status`），而保留其余结构不变。这种差异对维护任务完整性至关重要。
+结构化记录被模型更谨慎对待。模型更可能只修改特定字段（如 `status`），而保留其余 payload 不变。活店是 SQLite，不是 JSON 文件。
 
-> v3 说明：任务清单文件为 `tasks.json`，任务状态由 `status` 字段表达（pending/active/evidence_ready/passed/blocked/regressed），不再用布尔 `passes`。完成的判定不只看 `status`，还必须有配套的 `evidence.jsonl` 与 `reviews.jsonl` 记录支撑，详见 [SKILL.md](../SKILL.md) 的核心不变式。
+> v3 说明：任务清单在 `.harness/harness.db`，任务状态由 `status` 字段表达（pending/active/evidence_ready/passed/blocked/regressed）。完成的判定不只看 `status`，还必须有配套 evidence 与 reviews 记录，详见 [SKILL.md](../SKILL.md)。JSON 文件已废弃为活路径。
 
 ## 核心设计原则
 
 ### 1. 单一真相来源（Single Source of Truth）
 
-`tasks.json` 是唯一的任务清单文件。所有判断都基于它：
+`harness.db` 是唯一的任务清单。所有判断都基于它：
 - 什么还没做？→ `status: pending`（且依赖已满足）的任务
 - 做了什么？→ `status: passed` 的任务（须持有 evidence + 通过评审）
 - 总进度？→ `passed / total`
@@ -36,11 +36,11 @@ JSON 文件被模型更谨慎对待。模型更可能只修改特定字段（如
 
 ### 2. 叙事性日志（Narrative Log）
 
-`progress.txt` 用自然语言记录"做了什么"和"为什么"。JSON 精确但不解释原因。当 Agent 需要理解某个设计决策的背景时，叙事日志比 JSON 中的步骤列表更有用。
+progress 表用自然语言记录"做了什么"和"为什么"。结构化 payload 精确但不解释原因。
 
 ### 3. 快速上下文恢复（Fast Context Restore）
 
-从 `tasks.json` 只取推进下一步所需的最小信息：进度计数、待评审/阻塞项、以及下一个 eligible 任务。v3 刻意不把全量清单与 git 历史塞进主会话，以保证上下文不随任务数增长。可视化看板是独立目录 `board/`，不随技能安装。
+从 `harness.db` 只取推进下一步所需的最小信息：进度计数、待评审/阻塞项、以及下一个 eligible 任务。v3 刻意不把全量清单与 git 历史塞进主会话，以保证上下文不随任务数增长。可视化看板是独立目录 `board/`，不随技能安装。
 
 ### 4. 增量推进（Incremental Progress）
 
@@ -58,9 +58,9 @@ JSON 文件被模型更谨慎对待。模型更可能只修改特定字段（如
 
 ### Q: 要不要每个任务 commit？
 
-**推荐但不强制。** v3 中"完成"由 evidence + 独立评审判定，不再把 commit/push 当作完成条件。若项目是 Git 仓库，仍建议每任务一 commit——便于 `git revert` 独立回滚、`git log` 追踪、以及在 evidence 里记录代码 `rev`（短哈希）。非 Git 工作区时 evidence 的 `rev` 记 `N/A`，是否推远端由项目策略决定。防进度丢失的根基在 v3 是落盘的 tasks.json / evidence.jsonl / reviews.jsonl，而非必须 push。
+**推荐但不强制。** v3 中"完成"由 evidence + 独立评审判定，不再把 commit/push 当作完成条件。若项目是 Git 仓库，仍建议每任务一 commit——便于 `git revert` 独立回滚、`git log` 追踪、以及在 evidence 里记录代码 `rev`（短哈希）。非 Git 工作区时 evidence 的 `rev` 记 `N/A`，是否推远端由项目策略决定。防进度丢失的根基在 v3 是落盘的 `harness.db`，而非必须 push。
 
-### Q: tasks.json 太大了怎么办？
+### Q: 任务太多了怎么办？
 
 如果任务超过 50 个，考虑分阶段创建：
 - 先创建当前阶段的 20-30 个任务
@@ -114,7 +114,7 @@ v3 用 `depends_on` 表达任务间关系，取代 v1 的 `category` 标签。�
 "表头 font-weight: 600，font-size: 12px"
 ```
 
-### 4. progress.txt 格式
+### 4. progress 格式
 
 只读最后一条即可掌握进度，每轮追加一段、不改写历史：
 
@@ -123,7 +123,7 @@ v3 用 `depends_on` 表达任务间关系，取代 v1 的 `category` 标签。�
 YYYY-MM-DD · <task-id> <执行/评审>
 ----------------------------------------
 - 做了什么 / 触及文件
-- evidence: <evidence.jsonl 行 id>
+- evidence: <evidence id>
 - review: HARNESS_REVIEW: pass|fail | <task-id> | <理由>
 - 状态: <passed / 回 active 重试 / blocked>
 - PROGRESS: <passed>/<total>

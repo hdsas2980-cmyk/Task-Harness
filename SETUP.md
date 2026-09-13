@@ -26,15 +26,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 安装行为：
 
 1. 既有 Codex `task-harness` 目录先移动到 `%CODEX_HOME%\skill-backups\` 的时间戳目录；
-2. 使用 staging 目录复制 `SKILL.md`、`references/` 和 `scripts/check_task_harness_language.py`，完成后移动到目标；
+2. 使用 staging 目录复制 `SKILL.md`、`harness_db.py`、`references/`、`scripts/check_task_harness_language.py` 与 `scripts/convert_harness_json.py`，完成后移动到目标；
 3. 不安装 `commands/`、`board/`、开发测试或发布构建脚本；
 4. 不读取、不写入、不创建 `.cc-switch` 或 `.claude`。
 
 ## 项目初始化
 
-技能不再启动看板。状态文件放在项目 `.harness/`：`tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
+技能不再启动看板。唯一真相源是项目 `.harness/harness.db`。JSON/JSONL/TXT 不是活路径。
 
-先按 [中文原字段契约](references/language-contract.md)填写项目与任务说明、证据摘要、评审理由及进度正文。四份文件必须存在；尚未执行时，证据/评审可留空，禁止复制演示记录伪装为执行结果。保留 ID、JSON 键、机器枚举和原始技术输出；不加 `_zh` 字段，不创建翻译文件。
+先按 [中文原字段契约](references/language-contract.md)用 `HarnessDB` 写入项目与任务说明、证据摘要、评审理由及进度正文。旧项目先跑 `scripts/convert_harness_json.py` 一次性导入。尚未执行时，证据/评审可为空，禁止伪装为执行结果。保留 ID、payload 键、机器枚举和原始技术输出；不加 `_zh` 字段，不创建翻译文件。
 
 在项目根目录执行：
 

@@ -41,7 +41,7 @@ Codex 系统提示会让 agent 用 `wait_threads` 跟进，且非用户点名不
 
 - 默认 **1 个审计会话 + N 个实现会话**。实现会话按写范围拆，不按"能开多少就开多少"。
 - 常用编成示例：1 审计 + 1 前端 + 3 开发（后端 / 测试 / 工具）。N 由写范围互斥决定，不是固定编制。
-- **审计**：只读评审、写 `reviews.jsonl`；`pass` 的同一动作必须把 `tasks.json` 从 `evidence_ready` 改为 `passed`。不写业务代码、不自签 `passed`、不改实现者写范围。
+- **审计**：只读评审、写 reviews 表；`pass` 的同一动作必须 `upsert_task` 把 `harness.db` 从 `evidence_ready` 改为 `passed`。不写业务代码、不自签 `passed`、不改实现者写范围。
 - **实现者**：一张卡做到 `evidence_ready` 即停，抄送审计。不得把自检写成独立评审。
 - **领袖 / 编排**：命名、派卡、保证写范围互斥、把审计结论收口到看板。自己不兼同一张卡的实现与审计。
 
@@ -88,7 +88,7 @@ Codex 系统提示会让 agent 用 `wait_threads` 跟进，且非用户点名不
 - `{task_id}`: 任务 ID（如 `FE-6`、`BE-7`、`TEST-8`）
 - `{status}`: `evidence_ready`（等待评审）或 `blocked`（阻塞）
 - `{changed_files}`: 变更文件列表（如 `src/api/users.ts, tests/users.test.ts`）
-- `{ev_id}`: evidence.jsonl 中的证据 ID（如 `ev-fe-6-001`）
+- `{ev_id}`: evidence 表中的证据 ID（如 `ev-fe-6-001`）
 - `{commit_hash}`: Git commit 短哈希（如 `a1b2c3d`，若未提交则省略）
 
 **示例回报消息**:
@@ -104,7 +104,7 @@ Codex 系统提示会让 agent 用 `wait_threads` 跟进，且非用户点名不
 ```
 
 **主线收到回报后的处理**:
-1. 记录回报到 `progress.txt`；
+1. 用 `append_progress` 记录回报；
 2. 检查是否所有派发的卡都已回报；
 3. 若全部回报且状态为 `evidence_ready`，创建审计会话或发送评审请求；
 4. 若有 `blocked`，记录阻塞原因并决定下一步。
@@ -113,10 +113,10 @@ Codex 系统提示会让 agent 用 `wait_threads` 跟进，且非用户点名不
 
 ## 7. 完成、看板、失败重建
 
-看板读的是本机 `tasks.json`，不是聊天摘要。审计在对话里宣布 pass 但没写 `tasks.json`，看板就不会变。
+看板读的是本机 `harness.db`，不是聊天摘要。审计在对话里宣布 pass 但没 `upsert_task`，看板就不会变。
 
 - 实现者输出 `HARNESS_STATUS: evidence_ready`，抄送审计，停手。
-- 审计输出 `HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>`，并回写 `reviews.jsonl` + `tasks.json`。
+- 审计输出 `HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>`，并 `append_review` + `upsert_task` 回写 `harness.db`。
 - `passed` 只能由独立评审写入。
 
 `Upstream rejected` / `systemError`：不要死磕旧会话。新建 → 旧会话标题加 `归档_` → 停派旧会话。同一张未完成卡不得同时交给两条活会话。
@@ -126,9 +126,9 @@ Codex 系统提示会让 agent 用 `wait_threads` 跟进，且非用户点名不
 **场景**: 主线需要立即获得结果的 sidecar 任务。
 
 **适用**:
-- 规格评审（检查 `tasks.json` 是否合理）
+- 规格评审（检查 `harness.db` snapshot 是否合理）
 - 依赖图分析（检查是否有环、生成拓扑排序）
-- 格式校验（JSONL 是否合法）
+- 格式校验（snapshot / 中文契约）
 - 快速查询（Git 日志、文件列表、环境变量）
 
 **不适用**:
@@ -140,7 +140,7 @@ Codex 系统提示会让 agent 用 `wait_threads` 跟进，且非用户点名不
 ```python
 # 主线推进任务前，用子代理检查依赖图
 dep_analysis = spawn_agent(
-    message="分析 .harness/tasks.json 的依赖图，检查是否有环，返回拓扑排序结果"
+    message="分析 .harness/harness.db 的依赖图，检查是否有环，返回拓扑排序结果"
 )
 
 if dep_analysis.has_cycle:
@@ -157,7 +157,7 @@ if dep_analysis.has_cycle:
 - 审计写业务，或实现者自签 `passed`。
 - 标题带空格 / 中点 / 括号长句，导致无法一眼看出角色、版本、卡号。
 - 把官方已兼容的运行时约束重新开成 `blocked`。
-- 照抄其它会话的状态摘要，不核 `tasks.json`。
+- 照抄其它会话的状态摘要，不核 `harness.db`。
 - 用 `wait_threads` 阻塞主线等待子会话（应该用异步回报）。
 - 让实现者 spawn 子代理后自签 `passed`（评审必须独立会话）。
 

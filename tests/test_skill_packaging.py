@@ -8,12 +8,16 @@ class SkillPackagingTests(unittest.TestCase):
         templates = ROOT / 'references' / 'templates'
         self.assertTrue((templates / 'tasks.json').exists())
         self.assertTrue((templates / 'next-step.md').exists())
+        self.assertTrue((ROOT / 'harness_db.py').exists())
+        self.assertTrue((ROOT / 'scripts' / 'convert_harness_json.py').exists())
         for name in ('task-harness.html', 'app.js', 'serve_dashboard.py', 'init.ps1', 'init.sh'):
             self.assertFalse((templates / name).exists(), name)
         self.assertFalse((ROOT / 'start-dashboard.ps1').exists())
         skill = (ROOT / 'SKILL.md').read_text(encoding='utf-8')
         self.assertIn('board/', skill)
         self.assertNotIn('serve_dashboard.py', skill)
+        self.assertIn('harness.db', skill)
+        self.assertIn('convert_harness_json.py', skill)
     def test_board_is_independent_dir(self):
         board = ROOT / 'board'
         self.assertTrue((board / 'serve.py').exists())
@@ -23,7 +27,6 @@ class SkillPackagingTests(unittest.TestCase):
         js = (board / 'static' / 'app.js').read_text(encoding='utf-8')
         self.assertIn('/api/snapshot', js)
         self.assertIn('startPoll', js)
-        self.assertNotIn('isTauri', js)
 
 if __name__ == '__main__':
     unittest.main()

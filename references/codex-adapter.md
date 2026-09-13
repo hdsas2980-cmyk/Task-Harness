@@ -9,8 +9,8 @@
 实现完成后，把以下最小材料交给独立 Codex 评审上下文：
 
 - 项目绝对路径；
-- `tasks.json` 中当前任务对象；
-- 当前任务对应的 `evidence.jsonl` 行；
+- `harness.db` 中当前任务对象；
+- 当前任务对应的 evidence 记录；
 - 变更文件列表或 diff；
 - `references/review/completion-review.md`。
 

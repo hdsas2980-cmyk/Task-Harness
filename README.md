@@ -6,7 +6,7 @@
 
 ## 本分支当前约定
 
-**中文来自技能写入的源文件，不来自看板翻译。** 即使不启动看板，也应能直接从任务、证据、评审和进度文件读懂目标、现状及下一步。
+**中文来自 `harness.db` payload，不来自看板翻译。** 即使不启动看板，也应能直接从 snapshot 读懂目标、现状及下一步。
 
 - `project`、`description` 与任务 `name`、`desc`、`reason`、`next` 使用中文；证据写中文 `summary`，评审写中文 `reason`，进度正文写中文。
 - JSON 键、任务 ID、引用、状态/评审枚举、命令、路径、哈希及原始测试输出保持原文；不新增 `_zh` 字段，不使用 `board.i18n.json`，没有翻译兼容层。
@@ -18,8 +18,8 @@
 ## 保留的核心能力
 
 - 一轮一任务，依赖门控和优先级调度；
-- `tasks.json` 作为唯一真相源；
-- `evidence.jsonl` + 独立 `reviews.jsonl` 才能判定 `passed`；
+- `.harness/harness.db` 作为唯一真相源；JSON/JSONL/TXT 不再是活路径；
+- evidence 表 + 独立 reviews 表的 `pass` 才能判定 `passed`；
 - `pending → active → evidence_ready → passed` 状态机及 `blocked/regressed` 回退；
 - ponytail/YAGNI 阶梯；
 - 追加式进度日志、可回放验证和破坏性命令护栏；
@@ -34,7 +34,7 @@
 - 删除对 gstack、Claude Skill、CC Switch、MCP 的运行时依赖和兜底暗示；
 - 安装脚本只写 `$CODEX_HOME/skills/task-harness`，不创建 Claude/CC Switch 副本；
 - 安装前自动把既有 Codex Skill 隔离备份，禁止盲目覆盖；
-- 安装 `SKILL.md`、`references/` 和 `scripts/check_task_harness_language.py`；不安装看板、开发测试或 `commands/`。
+- 安装 `SKILL.md`、`harness_db.py`、`references/`、`scripts/check_task_harness_language.py` 与 `scripts/convert_harness_json.py`；不安装看板、开发测试或 `commands/`。
 
 ## 安装（只写 Codex）
 
@@ -60,7 +60,7 @@ bash scripts/install.sh
 
 ## 使用
 
-安装到 `$CODEX_HOME/skills/task-harness` 后，每个 Codex 任务读取项目 `.harness/`（或根目录）的 `tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。不要把工作目录切到 skill。
+安装到 `$CODEX_HOME/skills/task-harness` 后，每个 Codex 任务只读写项目 `.harness/harness.db`。旧 JSON 先跑一次转换脚本。不要把工作目录切到 skill。
 
 在项目目录运行已安装的校验器（PowerShell）：
 
@@ -69,7 +69,7 @@ $CodexRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.c
 python -X utf8 (Join-Path $CodexRoot 'skills/task-harness/scripts/check_task_harness_language.py') .
 ```
 
-四份文件必须存在；证据和评审可以为空，但不代表已经执行。正常任务交付禁止使用 `--templates`。校验失败先修正源文件，不能先推进状态再补检查。
+必须存在 `harness.db`；证据和评审可以为空，但不代表已经执行。正常任务交付禁止使用 `--templates`。校验失败先修正 DB，不能先推进状态再补检查。
 
 具体执行规则见 [SKILL.md](SKILL.md)，安装与更新见 [SETUP.md](SETUP.md)，独立评审见 [完成评审](references/review/completion-review.md)。
 
@@ -81,7 +81,7 @@ python -X utf8 (Join-Path $CodexRoot 'skills/task-harness/scripts/check_task_har
 powershell -ExecutionPolicy Bypass -File .\board\start.ps1 -ProjectDir "<项目绝对路径>"
 ```
 
-浏览器打开 `http://127.0.0.1:<port>/`。页面轮询任务目录，改 `tasks.json` 会自己刷新。Windows 请走 `board\start.ps1` / `start.bat`（UTF-8），避免控制台乱码。
+浏览器打开 `http://127.0.0.1:<port>/`。页面轮询 `harness.db`，改库会自己刷新。Windows 请走 `board\start.ps1` / `start.bat`（UTF-8），避免控制台乱码。
 
 当前三个标签页为 **任务列表 / 任务轨迹 / 进度日志**：任务按阶段分组，卡片内嵌状态阶段条及证据/评审按钮；轨迹跟随当前行，无任务下拉框；日志支持折叠和原文查看。界面文案固定中文，业务说明直接展示源字段；没有下一步、甘特图或依赖图标签页。状态阶段条不是估算完成百分比。
 

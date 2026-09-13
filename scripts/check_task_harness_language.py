@@ -8,6 +8,12 @@ import re
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from harness_db import HarnessDB, find_db_path
+
 FILES = ("tasks.json", "evidence.jsonl", "reviews.jsonl", "progress.txt")
 STATES = {"pending", "active", "evidence_ready", "passed", "blocked", "regressed"}
 CJK = re.compile(r"[\u3400-\u9fff]")
@@ -15,6 +21,42 @@ PLACEHOLDER = re.compile(r"\{\{.*?\}\}|^<[^>]+>$")
 PROTOCOL = re.compile(r"(?:HARNESS_STATUS: \S+ (?:IN_PROGRESS|COMPLETE|BLOCKED)|PROGRESS: \d+/\d+|EXIT_SIGNAL: (?:false|true))$")
 PROSE_LABELS = {"目标", "技术栈", "进展", "状态", "原因", "下一步", "验证结论", "评审结论", "规格评审结论"}
 
+
+
+def _payloads(rows):
+    result = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            result.append(row)
+            continue
+        payload = dict(row.get("payload") or row)
+        payload.pop("payload", None)
+        result.append(payload)
+    return result
+
+
+def snapshot_to_files(snapshot: dict) -> dict[str, str]:
+    meta = dict(snapshot.get("meta") or {})
+    meta.pop("schema_version", None)
+    board = meta.pop("board", None)
+    tasks_doc = dict(meta)
+    tasks_doc["tasks"] = _payloads(snapshot.get("tasks"))
+    files = {
+        "tasks.json": json.dumps(tasks_doc, ensure_ascii=False),
+        "evidence.jsonl": "\n".join(json.dumps(row, ensure_ascii=False) for row in _payloads(snapshot.get("evidence")) if isinstance(row, dict)),
+        "reviews.jsonl": "\n".join(json.dumps(row, ensure_ascii=False) for row in _payloads(snapshot.get("reviews")) if isinstance(row, dict)),
+        "progress.txt": snapshot.get("progress") or "",
+    }
+    if isinstance(board, dict):
+        files["board.json"] = json.dumps(board, ensure_ascii=False)
+    return files
+
+
+def validate_snapshot(snapshot: dict, *, templates: bool = False, extra_files: dict[str, str] | None = None) -> dict:
+    files = snapshot_to_files(snapshot)
+    if extra_files:
+        files.update(extra_files)
+    return validate_files(files, templates=templates)
 
 def validate_files(files: dict[str, str], *, templates: bool = False) -> dict:
     """供命令行和只读看板共用；files 为文件名到 UTF-8 文本的映射。"""
@@ -160,18 +202,30 @@ def validate_files(files: dict[str, str], *, templates: bool = False) -> dict:
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="只读检查任务原字段中文契约；不翻译、不改文件、不判定完成")
+    parser = argparse.ArgumentParser(description="只读检查 harness.db 中文契约；不翻译、不改库、不判定完成。--templates 仅用于技能种子 JSON。")
     parser.add_argument("root", nargs="?", default=".", help="项目根目录或任务文件目录")
     parser.add_argument("--templates", action="store_true", help="仅维护技能模板时允许占位符；任务交付禁止使用")
     args = parser.parse_args(argv)
     root = Path(args.root).resolve()
-    if (root / ".harness").is_dir():
-        root /= ".harness"
+    harness = root / ".harness" if (root / ".harness").is_dir() else root
     try:
-        files = {name: (root / name).read_text(encoding="utf-8-sig")
-                 for name in (*FILES, "board.json", "board.i18n.json") if (root / name).is_file()}
-        result = validate_files(files, templates=args.templates)
-    except (OSError, UnicodeError, RecursionError) as exc:
+        extra = {name: "" for name in ("board.i18n.json",) if (harness / name).is_file() or (root / name).is_file()}
+        if args.templates:
+            source = harness if (harness / "tasks.json").is_file() else root
+            files = {name: (source / name).read_text(encoding="utf-8-sig")
+                     for name in (*FILES, "board.json", "board.i18n.json") if (source / name).is_file()}
+            files.update(extra)
+            result = validate_files(files, templates=True)
+        else:
+            db_path = find_db_path(root)
+            if db_path is None:
+                expected = harness / "harness.db"
+                print(f"未初始化 {expected}，禁止回退 JSON/JSONL/TXT。旧项目先运行 scripts/convert_harness_json.py 一次性导入。", file=sys.stderr)
+                return 2
+            with HarnessDB(db_path, create=False) as db:
+                snapshot = db.read_snapshot()
+            result = validate_snapshot(snapshot, extra_files=extra)
+    except (OSError, UnicodeError, RecursionError, ValueError) as exc:
         print(f"无法校验任务目录 {root}：{exc}", file=sys.stderr)
         return 2
     if result["errors"]:

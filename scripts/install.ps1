@@ -19,10 +19,12 @@ $Stage = Join-Path $SkillsDir ".task-harness.staging-$Stamp"
 try {
   New-Item -ItemType Directory -Force -Path $Stage | Out-Null
   Copy-Item -LiteralPath (Join-Path $RepoDir 'SKILL.md') -Destination $Stage
+  Copy-Item -LiteralPath (Join-Path $RepoDir 'harness_db.py') -Destination $Stage
   Copy-Item -LiteralPath (Join-Path $RepoDir 'references') -Destination $Stage -Recurse
   $RuntimeScripts = Join-Path $Stage 'scripts'
   New-Item -ItemType Directory -Force -Path $RuntimeScripts | Out-Null
   Copy-Item -LiteralPath (Join-Path $RepoDir 'scripts/check_task_harness_language.py') -Destination $RuntimeScripts
+  Copy-Item -LiteralPath (Join-Path $RepoDir 'scripts/convert_harness_json.py') -Destination $RuntimeScripts
   Get-ChildItem -LiteralPath $Stage -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
   Move-Item -LiteralPath $Stage -Destination $Target
   Write-Host "[OK] Codex Skill -> $Target"
@@ -33,5 +35,8 @@ try {
 }
 
 $skill = Join-Path $Target 'SKILL.md'
-Write-Host "[VERIFY] $((Get-Content -LiteralPath $skill).Count) lines"
+$lineCount = @(Get-Content -LiteralPath $skill).Count
+Write-Host "[VERIFY] $lineCount lines"
 if ((Get-Content -LiteralPath $skill -Raw) -notmatch 'Codex Native') { throw '安装后的 SKILL.md 未检测到 Codex Native 标记。' }
+if ((Get-Content -LiteralPath $skill -Raw) -notmatch 'harness.db') { throw '安装后的 SKILL.md 未检测到 harness.db 存储契约。' }
+if (-not (Test-Path -LiteralPath (Join-Path $Target 'harness_db.py'))) { throw '安装后缺少 harness_db.py。' }

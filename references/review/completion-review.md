@@ -10,8 +10,8 @@
 
 ## 评审输入
 
-- 任务定义：`tasks.json` 中当前任务对象；
-- 证据：`evidence.jsonl` 中该任务的记录，必须有中文 `summary`，并检查 `cmd`、`exit`、原始 `tests`、`rev`；
+- 任务定义：`harness.db` 中当前任务对象；
+- 证据：evidence 表中该任务的记录，必须有中文 `summary`，并检查 `cmd`、`exit`、原始 `tests`、`rev`；
 - 变更：任务声明范围内的文件和 diff；非 Git 工作区直接读取文件并记录 `rev=N/A`；
 - 规则：本文件和 `SKILL.md`，不依赖额外 Skill 或运行时。
 

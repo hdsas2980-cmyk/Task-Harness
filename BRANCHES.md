@@ -12,6 +12,7 @@
 | `traework` | TRAE / Trae Work | `~/.trae-cn/skills/task-harness`；命令进 `~/.trae-cn/commands/`；评审子智能体进 `~/.trae-cn/agents/` | TRAE 专用。默认不写 Claude。 |
 | `workbuddy` | WorkBuddy | `~/.workbuddy/skills/task-harness` | WorkBuddy 用户技能目录。独立会话评审。 |
 | `dsh` | DeepSeek Harness（DSH，口头常说 dhs） | `~/.dsh/skills/task-harness`；项目级也可放 `<repo>/.dsh/skills/task-harness` | DSH 文件系统 skill 提供方扫描这两个根。 |
+| `board` | 无宿主 | 不安装技能 | 可视化看板专用分支；从 `codex` 分出，不与技能协议混提交。 |
 
 ## `codex` 分支阅读入口
 
@@ -47,8 +48,8 @@
 **必须保持一致（协议层）**
 
 - 5 态机与 `blocked` / `regressed`
-- `tasks.json` 唯一真相源
-- `evidence.jsonl` + 独立 `reviews.jsonl` 才能 `passed`
+- `.harness/harness.db` 唯一真相源（JSON 活路径废弃）
+- evidence 表 + 独立 reviews 表才能 `passed`
 - ponytail 阶梯、破坏性命令护栏、`HARNESS_STATUS` / `HARNESS_REVIEW` 契约
 - `references/review/` 的评审内核（宿主分支可以改调用方式，不能改判定铁律）
 

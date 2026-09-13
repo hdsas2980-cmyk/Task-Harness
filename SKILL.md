@@ -1,6 +1,6 @@
 ---
 name: task-harness
-description: Codex 专用长时任务骨架：一轮一任务、任务束同会话串行、create_thread 异步派卡、子代理 spawn_agent 只做短 sidecar，禁止 wait_threads 阻塞主线。状态落盘，证据与独立评审共同判定完成。适用于跨多个 Codex 任务/会话推进的大型工程，以及多会话编成、会话命名、派卡回报、独立审计、会话作废归档；技能重大变更须卸载重装。
+description: Codex 专用长时任务骨架：一轮一任务、任务束同会话串行、create_thread 异步派卡、子代理 spawn_agent 只做短 sidecar，禁止 wait_threads 阻塞主线。状态只写 .harness/harness.db，废弃 JSON 活路径。证据与独立评审共同判定完成。适用于跨多个 Codex 任务/会话推进的大型工程，以及多会话编成、会话命名、派卡回报、独立审计、会话作废归档；技能重大变更须卸载重装。
 ---
 
 # task-harness v3.1 — Codex Native
@@ -26,11 +26,11 @@ Codex 系统提示默认「用户没点名就不要 `create_thread`」，以及�
 
 - `SKILL.md` 调度协议、任务束、评审契约
 - `references/codex-parallel.md` 或 `references/templates/next-step.md`
-- 安装脚本会拷贝的 `references/`、语言校验器
+- `references/`、语言校验器、`harness_db.py` 与转换脚本
 
 做法：在仓库根目录重新执行 `scripts/install.ps1`（Windows）或 `scripts/install.sh`。安装脚本会先把旧目录移到 `$CODEX_HOME/skill-backups/`，再写入新副本。禁止只覆盖单个文件。
 
-若安装副本没有文首「调度硬规则」，或 description 不含 `wait_threads` / `create_thread`，视为未更新：停手，先重装，再继续编排。
+若安装副本没有文首「调度硬规则」，或 description 不含 `wait_threads` / `create_thread` / `harness.db`，视为未更新：停手，先重装，再继续编排。
 
 ## 定位与哲学
 
@@ -47,8 +47,8 @@ Codex 系统提示默认「用户没点名就不要 `create_thread`」，以及�
 ## Codex 运行契约
 
 1. **当前 Codex 任务 = 一轮**：默认只推进一个任务；不要在同一轮顺手处理邻近任务。
-2. **状态外置**：项目根或 `.harness/` 保存 `tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。
-3. **最小读取**：读 `.harness/tasks.json`（或根目录 `tasks.json`）与 `progress.txt` 末段；随后只读当前任务、依赖结论和触及的代码。不要为了看板去跑 HTTP。
+2. **状态外置**：唯一真相源是 `.harness/harness.db`。禁止把 `tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt` 当活数据读写；没有 DB 就是未初始化，不是回退 JSON。旧项目先跑一次 `scripts/convert_harness_json.py` 整目录导入，旧文件只作只读备份。
+3. **最小读取**：用 `HarnessDB.open(project, create=False).read_snapshot()` / `get_task()` 读 `.harness/harness.db`；只取当前任务、依赖结论、progress 末段和触及的代码。不要手写 SQL，不要为了看板去跑 HTTP，不要读旧 JSON。
 4. **工具原生优先**：在 Windows/Codex 上优先使用 PowerShell 和现有本地工具；已有测试、构建、格式化工具优先于新增依赖。
 5. **评审隔离**：实现者不能充当独立评审者。优先使用另一个 Codex 上下文/评审任务；无法获得独立上下文时必须如实记为 `blocked`，不可把同一轮自检冒充独立评审。
 6. **不伪造完成**：没有可重放证据、评审契约或依据不足时，状态只能是 `evidence_ready`、`blocked` 或回到 `active`。
@@ -58,7 +58,7 @@ Codex 系统提示默认「用户没点名就不要 `create_thread`」，以及�
 
 1. 一次 Codex 任务只推进一个依赖已满足、优先级最高的 `pending`/`regressed` 任务。
 2. 不回读全量清单、不回读旧证据；只读取推进当前任务所需的最小范围。
-3. `passed` 必须同时存在一条对应 `evidence.jsonl` 记录和一条 `reviews.jsonl` 的 `pass` 记录。
+3. `passed` 必须同时存在一条对应 evidence 记录和一条 reviews 的 `pass` 记录（都在 `harness.db` 表里，不是 JSONL 文件）。
 4. 评审必须在独立上下文完成，并记录评审上下文/来源。
 5. 任何阻塞必须写入结构化 reason；不得用"看起来没问题"替代验证。
 6. 已通过任务受依赖、接口或环境变化影响时，标记 `regressed` 并回到 `active`。
@@ -110,10 +110,10 @@ Codex 系统提示默认「用户没点名就不要 `create_thread`」，以及�
 **触发条件**: 写范围互斥的任务或束，主线不需要立即获得结果。
 
 **流程**:
-1. 领袖会话检查 `tasks.json`，识别可并行任务（写范围互斥）；
+1. 领袖会话检查 `harness.db`，识别可并行任务（写范围互斥）；
 2. 创建 N 个实现会话，按 `references/codex-parallel.md` 命名（如 `前端v1-FE-6-用户列表`）；
 3. 用 `send_message_to_thread` 派发卡片，**不阻塞等待**；
-4. 主线继续记录派卡日志到 `progress.txt`，或处理其他任务；
+4. 主线继续用 `append_progress` 记录派卡日志，或处理其他任务；
 5. 各实现会话完成后，发送**结构化回报消息**给主线；
 6. 领袖收到回报后，推进评审或下一张卡。
 
@@ -146,9 +146,9 @@ Codex 系统提示默认「用户没点名就不要 `create_thread`」，以及�
 4. 主线基于结果继续推进。
 
 **适用场景**:
-- 规格评审（需要立即知道 `tasks.json` 是否合理）
+- 规格评审（需要立即知道 snapshot 任务是否合理）
 - 依赖图分析（检查是否有环）
-- 格式校验（JSONL 是否合法）
+- 格式校验（snapshot / 中文契约）
 - 快速查询（Git 日志、文件列表）
 
 **不适用场景**:
@@ -161,7 +161,7 @@ Codex 系统提示默认「用户没点名就不要 `create_thread`」，以及�
 # 主线推进 bundle-user-api
 def execute_bundle():
     # 1. 用子代理检查依赖图
-    dep_check = spawn_agent("分析 tasks.json 依赖图，检查是否有环")
+    dep_check = spawn_agent("分析 harness.db 依赖图，检查是否有环")
     if dep_check.has_cycle:
         return "blocked: 依赖图有环"
     
@@ -185,13 +185,13 @@ def execute_bundle():
 2. 创建或换卡后立刻按 `references/codex-parallel.md` 命名；作废先改 `归档_` 再停派。
 3. 派卡用独立会话；共享 checkout 时写范围互斥，提交三查。
 4. 子代理只做无共享状态的 sidecar；要进侧边栏给用户跟的用会话，不用子代理。
-5. 实现者停在 `evidence_ready` 并抄送审计；审计 `pass` 必须回写 `tasks.json`，看板才会变。
+5. 实现者停在 `evidence_ready` 并抄送审计；审计 `pass` 必须 `upsert_task` 回写 `harness.db`，看板才会变。
 
 细则、标题正则、失败重建：`references/codex-parallel.md`。
 
 ## 状态机
 
-页面显示中文，JSON 仍使用英文枚举。任务数据本身必须以中文为人类可读语言：`project`、`description`、任务 `name`、`desc`、`reason`、`next`、证据 `summary`、评审 `reason` 和进度叙事必须使用中文。不得新增 `_zh` 字段，不得新增看板翻译层，不考虑旧版兼容；ID、状态枚举、命令、路径、revision 和哈希保持原文。没有看板时，直接读取任务、证据、评审、进度文件也必须能理解当前目标、状态、阻塞、验证和评审。
+页面显示中文，DB payload 仍使用英文枚举。任务数据本身必须以中文为人类可读语言：`project`、`description`、任务 `name`、`desc`、`reason`、`next`、证据 `summary`、评审 `reason` 和进度叙事必须使用中文。不得新增 `_zh` 字段，不得新增看板翻译层，不考虑旧版兼容；ID、状态枚举、命令、路径、revision 和哈希保持原文。没有看板时，直接读 `harness.db` snapshot 也必须能理解当前目标、状态、阻塞、验证和评审。
 
 ```text
 pending（待处理） → active（进行中） → evidence_ready（待独立评审） → passed（已通过）
@@ -206,19 +206,19 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 ### 相 1 · 设计（一次性）
 
 1. 对候选任务逐级过 ponytail 阶梯，移除伪需求、重复实现和不必要依赖。
-2. 创建四份运行文件。`tasks.json` 顶层写中文 `project`、`description`；每个顶层任务写中文 `name`、`desc`、`reason`、`next`，并保留稳定 `id`、`priority`、`depends_on`、可执行 `verify`、英文 `status`。字段与示例见 `references/language-contract.md`。
+2. 初始化 `.harness/harness.db`，不要把四份 JSON 当活数据。新项目可把 `references/templates/` 种子拷到 `.harness/` 后跑一次 `scripts/convert_harness_json.py`；或直接 `HarnessDB.open(project, create=True)`，`set_meta` 写中文 `project`/`description`，`upsert_task` 写中文 `name`/`desc`/`reason`/`next`，并保留稳定 `id`、`priority`、`depends_on`、可执行 `verify`、英文 `status`。字段与示例见 `references/language-contract.md`。
 3. 识别需要原子推进的任务对，创建 `bundle`（API + 测试、模型 + 迁移）。
 4. 按 `references/review/spec-review.md` 做规格评审，检查依赖环、路径归属、命令可执行性和工程原则。
-5. 设计评审结论以中文追加到 `progress.txt`；运行下方中文契约门禁，通过后才可交付编排。不要把评审意见只留在对话里。
+5. 设计评审结论以中文 `append_progress`；运行下方中文契约门禁，通过后才可交付编排。不要把评审意见只留在对话里。
 6. 编排落盘即可。可视化看板是独立目录，不随技能安装。
 
 ### 相 2 · 执行（每个 Codex 任务）
 
-1. 读取 `tasks.json` 与 `progress.txt` 末段，得到当前可推进任务；先运行中文契约门禁，失败则修复源文件，不推进任务。
+1. 读取 `harness.db` snapshot 与 progress 末段，得到当前可推进任务；先运行中文契约门禁，失败则修复 harness.db payload，不推进任务。
 2. 只把一个 eligible 任务（或束）置为 `active`；修改前先确认范围和回滚点。
 3. 只读该任务（或束内任务）、依赖结论、任务声明路径和必要代码。
 4. 若是束，按 `bundle` 数组顺序串行推进每个任务；若是单任务，直接推进。
-5. 运行验证命令（束的 `verify` 是整束验证），记录可重放证据到 `evidence.jsonl`；必填中文 `summary`，原始 `tests` 输出另存，不翻译或替换。
+5. 运行验证命令（束的 `verify` 是整束验证），用 `append_evidence` 记录可重放证据；必填中文 `summary`，原始 `tests` 输出另存，不翻译或替换。
 6. 更新中文 `reason`、`next` 并追加中文进度（任务编号、进展、状态、验证结论、下一步）；中文契约检查通过后才置为 `evidence_ready`，输出 `HARNESS_STATUS`，停手。
 7. 不在本轮置 `passed`；等待独立评审。
 
@@ -227,7 +227,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 1. 新建 Codex 评审任务，读取项目路径、任务对象、evidence、变更范围/diff、`references/review/completion-review.md`。
 2. 独立运行中文契约检查，并人工确认说明有实质意义；再按严重问题门禁检查安全、范围、测试、状态、可恢复性。
 3. 输出 `HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>`。
-4. 主任务将中文理由追加到 `reviews.jsonl`，更新中文 `reason`、`next` 和进度；再次通过中文契约检查后，收到 `pass` 才可改为 `passed`；收到 `fail` 则改回 `active`。
+4. 主任务用 `append_review` 追加中文理由，更新中文 `reason`、`next` 和进度；再次通过中文契约检查后，收到 `pass` 才可改为 `passed`；收到 `fail` 则改回 `active`。
 
 ## 门禁
 
@@ -235,7 +235,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 
 1. 依赖检查：置为 `active` 前，所有 `depends_on` 必须为 `passed`。
 2. 验证命令：`verify` 存在、可执行、退出 0。
-3. 独立评审：每个 `passed` 任务对应一条 `reviews.jsonl` 的 `pass` 记录，且 `reviewer_context` 不等于实现者上下文。
+3. 独立评审：每个 `passed` 任务对应一条 reviews 表的 `pass` 记录，且 `reviewer_context` 不等于实现者上下文。
 4. 范围约束：变更文件逐个落在任务声明路径内；写操作有效，不自动扩展到邻近目录、其他项目或生产环境。所有覆盖/移动先建立带时间戳的备份或隔离副本。
 
 5. 中文契约：设计交付、置为 `active` / `evidence_ready` / `passed` 前，必须执行以下只读命令（Python 3.10+）。`<技能目录>` 是当前所加载 `SKILL.md` 的所在目录；使用绝对路径，不切换到技能仓库执行任务，也不依赖源仓库。安装后的技能自带该脚本：
@@ -248,17 +248,19 @@ python -X utf8 "<技能目录>/scripts/check_task_harness_language.py" "<任务�
 
 ## 文件契约
 
-建议将运行文件放在项目 `.harness/`；兼容项目根目录：
+唯一真相源：项目 `.harness/harness.db`。**不兼容** 把 JSON/JSONL/TXT 当活数据。没有 DB = 未初始化，不是回退 JSON。
 
-- `tasks.json`：唯一任务真相源；状态为 `pending`、`active`、`evidence_ready`、`passed`、`blocked`、`regressed`。
-- `evidence.jsonl`：追加 `{id, task, summary, cmd, exit, tests, rev, ts}`；`summary` 是必需的中文结果摘要，`tests` 保留原始测试输出；可增加 `encoding`、`artifacts`、`environment`。
-- `reviews.jsonl`：追加 `{id, task, ev, reviewer_context, verdict, reason, ts}`。
-- `progress.txt`：中文追加式叙事日志；每段含时间与任务 ID、进展、中文状态、验证/评审结论及下一步。命令和原始输出放代码围栏；只读取末段恢复背景，格式见模板。
+- 任务表：`upsert_task` 写入完整 payload；状态为 `pending`、`active`、`evidence_ready`、`passed`、`blocked`、`regressed`。
+- 证据表：`append_evidence({id, task, summary, cmd, exit, tests, rev, ts})`；`summary` 是必需中文摘要，`tests` 保留原始测试输出。
+- 评审表：`append_review({id, task, ev, reviewer_context, verdict, reason, ts})`。
+- 进度表：`append_progress` 追加中文叙事；每段含时间与任务 ID、进展、中文状态、验证/评审结论及下一步。
+- 可选地图：`set_meta('board', {...})`，不影响任务队列。
+- 旧项目：`python -X utf8 "<技能目录>/scripts/convert_harness_json.py" "<项目绝对路径>"` 一次性整目录导入；旧文件保留作只读备份，运行时不读。禁止让 agent 一条条 INSERT。
 - `board/`：可视化看板是独立目录，不随技能安装；见下文「可视化看板」。
 
 ## 可视化看板（独立项目，不随技能安装）
 
-看板界面文案必须直接硬编码为中文，不做运行时翻译、不做双语界面、不读取 `board.i18n.json`，也不承担任务内容翻译。看板只读取任务文件已经写好的中文字段并进行展示、筛选、分组和状态可视化。缺少中文任务数据时应明确报错或标记契约失败，不能回退显示英文，也不为旧数据提供兼容翻译。数据不合规时显示契约错误及文件位置；修复原文件后刷新，不由看板改写任务。
+看板界面文案必须直接硬编码为中文，不做运行时翻译、不做双语界面、不读取 `board.i18n.json`，也不承担任务内容翻译。看板只读取 `harness.db` snapshot 里已写好的中文字段并进行展示、筛选、分组和状态可视化。缺少中文任务数据时应明确报错或标记契约失败，不能回退显示英文，也不为旧数据提供兼容翻译。数据不合规时显示契约错误；修复 DB 后刷新，不由看板改写任务。
 
 
 看板不在本技能包内，安装脚本也不会拷贝它。仓库独立目录 `board/` 提供只读 HTTP 页，轮询项目任务目录并自动刷新。
@@ -272,19 +274,19 @@ powershell -ExecutionPolicy Bypass -File .\board\start.ps1 -ProjectDir "<项目�
 
 Windows 乱码：用 `board\start.ps1` / `board\start.bat`（已设 UTF-8 / `chcp 65001` / `python -X utf8`），不要自己再开一套 `python -m http.server`。
 
-技能只读写 `tasks.json`、`evidence.jsonl`、`reviews.jsonl`、`progress.txt`。不要把看板 HTML 拷进 `.harness/`，不要为了刷新看板再跑技能脚本。
+技能只读写 `.harness/harness.db`。Agent 用 `HarnessDB` 的 `upsert_task` / `append_evidence` / `append_review` / `append_progress` / `set_meta`，不要手写 SQL，不要逐条从旧 JSON 搬。不要把看板 HTML 拷进 `.harness/`，不要为了刷新看板再跑技能脚本。
 
 ## 修改任务定义
 
-直接编辑 `tasks.json`，顶层 `rev` 加一，并在 `progress.txt` 追加原因。受影响的 `passed` 任务必须标记 `regressed` 回到 `active`。不要删除历史 evidence/review；它们是审计链的一部分。
+用 `upsert_task` 更新任务，`set_meta('rev', n+1)`，并 `append_progress` 原因。受影响的 `passed` 任务必须标记 `regressed` 回到 `active`。不要删除历史 evidence/review；它们是审计链的一部分。
 
 ## 项目地图（人看的「我现在站在哪」）
 
 任务队列回答「下一张卡是什么」，**回答不了**「现在做到哪了、对不对、下一步为什么是它」。
 长期项目里真正会失控的是**人的心智模型**，不是代码质量（那是门禁在管）。所以看板支持一份**可选**的
-`.harness/board.json`：有就把 `where` / `next` 显示在「下一步看板」里，没有就只显示可推进的下一张卡，**不影响任务队列**。
+`meta.board`（可选地图，不是任务真相源）：有就把 `where` / `next` 显示在「下一步看板」里，没有就只显示可推进的下一张卡，**不影响任务队列**。
 
-看板操作面（给人看的优先级，不是 JSON 状态枚举顺序）：
+看板操作面（给人看的优先级，不是状态枚举顺序）：
 
 1. 默认打开 **任务列表**，其次为下一步看板 / 进度时间线 / 进度日志。
 2. 左侧筛选从上到下：**全部任务 → 已阻塞 → 待评审 → 进行中 → 可推进**。卡片和侧栏颜色跟状态机一致。

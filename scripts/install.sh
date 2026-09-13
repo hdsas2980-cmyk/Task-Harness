@@ -19,13 +19,17 @@ cleanup(){ rm -rf "$STAGE"; }
 trap cleanup EXIT
 mkdir -p "$STAGE"
 cp "$REPO_DIR/SKILL.md" "$STAGE/"
+cp "$REPO_DIR/harness_db.py" "$STAGE/"
 cp -R "$REPO_DIR/references" "$STAGE/"
 mkdir -p "$STAGE/scripts"
 cp "$REPO_DIR/scripts/check_task_harness_language.py" "$STAGE/scripts/"
+cp "$REPO_DIR/scripts/convert_harness_json.py" "$STAGE/scripts/"
 find "$STAGE" -type d -name "__pycache__" -prune -exec rm -rf {} +
 mv "$STAGE" "$TARGET"
 trap - EXIT
 echo "[OK] Codex Skill -> $TARGET"
 echo "[INFO] 未安装 commands/；未访问 .cc-switch 和 .claude。"
 grep -q 'Codex Native' "$TARGET/SKILL.md"
+grep -q 'harness.db' "$TARGET/SKILL.md"
+test -f "$TARGET/harness_db.py"
 echo "[VERIFY] Codex Native marker OK"
