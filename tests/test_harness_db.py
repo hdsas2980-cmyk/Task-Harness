@@ -228,5 +228,27 @@ class HarnessDBTests(unittest.TestCase):
             reopened.close()
 
 
+    def test_write_gate_rejects_english_progress_and_accepts_machine_prefix(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with HarnessDB.open(root, create=True) as db:
+                db.set_meta("project", "写入门禁")
+                db.set_meta("description", "拒绝英文进度")
+                db.upsert_task({
+                    "id": "t-01",
+                    "name": "写库",
+                    "desc": "验证写入门禁",
+                    "reason": "暂无阻塞",
+                    "next": "追加进度",
+                    "status": "active",
+                })
+                with self.assertRaises(ValueError) as ctx:
+                    db.append_progress("Task finished. Waiting for review.")
+                self.assertIn("中文契约失败", str(ctx.exception))
+                self.assertIn("摘录", str(ctx.exception))
+                self.assertTrue(
+                    db.append_progress("## 2026-09-14 | t-01 | 执行\nTASK_ID: t-01\n- 结论：中文说明保留机器回执")
+                )
+
 if __name__ == "__main__":
     unittest.main()

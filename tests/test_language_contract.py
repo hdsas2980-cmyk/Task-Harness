@@ -83,6 +83,22 @@ class LanguageContractTests(unittest.TestCase):
                 else: files["progress.txt"] = content
                 self.assert_rejected(files, "progress.txt")
 
+    def test_progress_rejects_unlabeled_english_with_snippet(self):
+        files = valid_files()
+        files["progress.txt"] = "## 2026-09-12 | t-01 | 执行\nTask finished. Waiting for review.\n"
+        result = self.run_check(files)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("progress.txt", result.stderr)
+        self.assertIn("摘录", result.stderr)
+        self.assertIn("Task finished", result.stderr)
+
+    def test_progress_allows_explicit_machine_receipts_but_requires_chinese_conclusion(self):
+        files = valid_files()
+        files["progress.txt"] += "TASK_ID: t-01\nREV: abc123\nEXIT_CODE: 0\n- 结论：中文说明保留机器回执并完成验证\n"
+        self.assertEqual(self.run_check(files).returncode, 0)
+        files["progress.txt"] = "TASK_ID: t-01\nREV: abc123\nEXIT_CODE: 0\n"
+        self.assert_rejected(files, "progress.txt")
+
     def test_progress_allows_fenced_commands_and_protocol(self):
         files = valid_files()
         files["progress.txt"] += "```sh\npytest -q\n```\nHARNESS_STATUS: t-01 IN_PROGRESS\nPROGRESS: 0/1\nEXIT_SIGNAL: false\n"
@@ -206,6 +222,7 @@ class LanguageContractTests(unittest.TestCase):
             installed = home / "skills/task-harness"
             self.assertEqual((installed / "scripts/check_task_harness_language.py").read_bytes(), CHECK.read_bytes())
             self.assertTrue((installed / "harness_db.py").is_file())
+            self.assertEqual((installed / "references/codex-native.md").read_bytes(), (ROOT / "references/codex-native.md").read_bytes())
             self.assertTrue((installed / "scripts/convert_harness_json.py").is_file())
             self.assertFalse((installed / "board").exists())
 
@@ -221,6 +238,7 @@ class LanguageContractTests(unittest.TestCase):
             self.assertTrue((installed / "scripts/check_task_harness_language.py").is_file(), "安装未交付校验器")
             self.assertEqual((installed / "scripts/check_task_harness_language.py").read_bytes(), CHECK.read_bytes())
             self.assertTrue((installed / "harness_db.py").is_file())
+            self.assertEqual((installed / "references/codex-native.md").read_bytes(), (ROOT / "references/codex-native.md").read_bytes())
             self.assertTrue((installed / "scripts/convert_harness_json.py").is_file())
             self.assertFalse((installed / "board").exists())
             checked = subprocess.run([sys.executable, "-X", "utf8", str(installed / "scripts/check_task_harness_language.py"),

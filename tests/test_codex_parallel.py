@@ -45,77 +45,38 @@ def title_re():
 
 
 class CodexParallelDocTests(unittest.TestCase):
-    def test_skill_points_to_parallel_reference(self):
-        skill = SKILL.read_text(encoding="utf-8")
-        self.assertIn("references/codex-parallel.md", skill)
-        self.assertIn("多会话并行", skill)
-        desc = [line for line in skill.splitlines() if line.startswith("description:")][0]
-        for word in ("多会话", "子代理", "会话命名", "派卡", "归档", "任务束", "create_thread", "wait_threads"):
-            self.assertIn(word, desc)
-        self.assertIn("调度硬规则", skill)
-        self.assertIn("卸载重装", skill)
-        self.assertIn("读密集工作优先并行", skill)
-        self.assertIn("`spawn_agent`", skill)
-        self.assertIn("`wait_agent` 对应 `spawn_agent`", skill)
-        self.assertIn("`wait_threads` 对应已经创建的会话", skill)
-        self.assertIn("不是禁用项", skill)
-        self.assertIn("普通任务先使用 `spawn_agent`", skill)
-        self.assertIn("写密集工作", skill)
+    def test_skill_routes_and_preserves_core_invariants(self):
+        text = SKILL.read_text(encoding="utf-8")
+        for marker in ("references/codex-parallel.md", "references/codex-native.md", "多会话并行", "卸载重装", "harness.db", "evidence_ready", "独立", "任务束"):
+            self.assertIn(marker, text)
 
-    def test_readme_points_to_parallel_reference(self):
-        readme = README.read_text(encoding="utf-8")
-        self.assertIn("references/codex-parallel.md", readme)
+    def test_dispatch_honors_host_authorization(self):
+        paths = (SKILL, DOC, README, ROOT / "references/templates/next-step.md")
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("spawn_agent", text, path)
+            self.assertIn("create_thread", text, path)
+            self.assertIn("写密集", text, path)
+            self.assertIn("用户明确要求", text, path)
+            self.assertIn("已达到宿主容量上限", text, path)
+            for stale in ("覆盖系统默认", "不必先耗尽子代理容量", "容量不足不是新聊天授权", "不必另等", "独立上下文例外"):
+                self.assertNotIn(stale, text, path)
 
-    def test_parallel_doc_has_required_headings(self):
+    def test_parallel_sections_and_identity_contract(self):
         text = DOC.read_text(encoding="utf-8")
-        for heading in (
-            "## 1. 会话标题",
-            "## 2. 编成",
-            "## 3. 创建与派卡",
-            "## 4. 写范围与提交",
-            "## 5. 子代理还是会话",
-            "## 6. 异步回报契约（create_thread 模式）",
-            "## 7. 完成、看板、失败重建",
-            "## 8. 子代理同步委托（spawn_agent 模式）",
-            "## 9. 红线",
-        ):
-            self.assertIn(heading, text)
-        self.assertIn("一轮仍只推进一张卡", text)
-        self.assertIn("harness.db", text)
-        self.assertIn("归档_", text)
-        self.assertIn("create_thread", text)
-        self.assertIn("spawn", text.lower())
-        self.assertIn("## 0. 覆盖系统默认", text)
-        self.assertNotIn("只在用户明确要求独立会话时", text)
-        self.assertIn("读密集工作优先 `spawn_agent`", text)
-        self.assertIn("测试执行、测试结果分析、日志收集", text)
-        self.assertIn("`wait_agent` 收取 `spawn_agent` 结果", text)
-        self.assertIn("`wait_threads` 等待或收集已经创建的会话", text)
-        self.assertIn("普通任务调用 `create_thread` 前", text)
-        self.assertIn("不会自动把提交动作、合并、cherry-pick 或 DB 回写交给主线", text)
-        self.assertIn("append_evidence", text)
+        for n in range(10):
+            self.assertIn(f"## {n}.", text)
+        for marker in ("clientThreadId", "threadId", "非 Fork", "初始 prompt", "close_agent", "串行", "append_review", "不得星标"):
+            self.assertIn(marker, text)
 
-    def test_dispatch_language_does_not_restore_session_first_rule(self):
+    def test_waits_do_not_imply_integration(self):
         skill = SKILL.read_text(encoding="utf-8")
         doc = DOC.read_text(encoding="utf-8")
-        template = (ROOT / "references" / "templates" / "next-step.md").read_text(encoding="utf-8")
-        for text in (skill, doc, template):
-            self.assertIn("spawn_agent", text)
-            self.assertIn("写密集", text)
-            self.assertNotIn("测试（应该用 `create_thread`", text)
-            self.assertNotIn("`spawn_agent` 只做短 sidecar", text)
-
-    def test_wait_tools_and_thread_fallback_are_distinguished(self):
-        skill = SKILL.read_text(encoding="utf-8")
-        doc = DOC.read_text(encoding="utf-8")
-        template = (ROOT / "references" / "templates" / "next-step.md").read_text(encoding="utf-8")
-        combined = "\n".join((skill, doc, template))
-        self.assertIn("`spawn_agent` 的结果用 `wait_agent`", skill)
-        self.assertIn("已创建的 `create_thread` 会话用 `wait_threads`", skill)
-        self.assertIn("普通任务只有在 `spawn_agent` 满员后", combined)
-        self.assertIn("独立评审是必须使用独立会话的协议例外", doc)
-        self.assertIn("不会自动把提交、合并、cherry-pick 或 DB 回写", combined)
+        self.assertIn("wait_agent", skill)
+        self.assertIn("wait_threads", skill)
         self.assertIn("决定是否合并并重新验证", skill)
+        self.assertIn("不会自动把提交动作、合并、cherry-pick 或 DB 回写交给主线", doc)
+        self.assertIn("不立刻重复", doc)
 
     def test_title_regex_accepts_canonical_names(self):
         pattern = title_re()

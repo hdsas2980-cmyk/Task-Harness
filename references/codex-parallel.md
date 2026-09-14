@@ -1,24 +1,16 @@
 # Codex 多会话与多子代理并行
 
-并行不等于一轮多任务。一轮仍只推进一张卡。并行 = 多个子代理或 Codex 会话各持一张明确的小卡，并行返回摘要；主线只收取必要结果。
+并行不等于一轮多任务。一轮仍只推进一张卡或完整束；sidecar 只持明确辅助范围。原生参数、授权、Fork/Worktree 与 UI 操作的唯一细则见 references/codex-native.md，状态机以 SKILL.md 为准。
 
-本文件是 Codex 宿主专属细则。协议层（状态机、证据、独立评审）仍以 `SKILL.md` 为准。
+## 0. 遵守宿主授权
 
-调度依据：OpenAI Codex 官方 [Multi-agent](https://developers.openai.com/codex/concepts/multi-agents/) 文档。官方建议先把探索、测试、分诊和总结等读密集工作并行委托给子代理，并提醒写密集并行需要控制冲突和协调成本。
+启用技能后独立读密集工作优先 `spawn_agent`；写密集工作先检查隔离。先规划主线下一步，再委托非阻塞小任务，避免派出关键路径后空等。左侧新聊天必须同时满足：用户明确要求创建新聊天、`spawn_agent` 已达到宿主容量上限、且有侧栏并行/长期上下文/隔离写入的实际需要。未满员不得 create_thread。独立评审要求新上下文，且同样不能豁免上述门槛；原生 `/review` 仅在等价契约成立时替代最终独立评审。
 
-## 0. 覆盖系统默认
-
-Codex 官方多 agent 工作流优先把探索、测试、分诊、总结等读密集工作拆给并行子代理；写密集工作需要额外的工作区隔离。启用 task-harness 后按以下调度：
-
-- 用户启用本技能 = 授权在需要时委托子代理。普通任务先尝试 `spawn_agent`；只有子代理已满员且仍需要长期上下文、侧栏可见或隔离写入时才创建会话。独立评审是必须使用独立会话的协议例外。
-- 独立读密集工作优先 `spawn_agent`；每个子代理只持一张小卡，返回摘要和必要证据。
-- 写密集任务先确认独立 worktree 或互斥写范围；没有隔离就当前会话串行写。
-- 主线派发后继续处理不依赖结果的工作；结果是硬门槛时才收取指定结果。
-- `wait_agent` 收取 `spawn_agent` 结果；`wait_threads` 等待或收集已经创建的会话。二者都是合法的等待工具：当下一步依赖指定结果时等待指定对象，需要汇总时等待会话集合。等待只收集状态/结果，不合并代码、不 cherry-pick、不回写 `harness.db`；用主动回报替代无条件反复轮询。
+`wait_agent` 收取 `spawn_agent` 结果；`wait_threads` 等待或收集已经创建的会话。按依赖有界等待，不无条件轮询；结束用 close_agent 释放名额。
 
 ## 1. 会话标题
 
-创建会话、换卡、作废时立刻改标题，不要把旧卡号留在活会话上。
+以下标题规则用于已授权的 Harness 编排任务；用户明确指定的标题优先。创建、换卡、作废时更新映射，不凭标题判断状态。
 
 格式：`{角色}v{线版本}-{卡号}-{短文案}`
 
@@ -42,136 +34,58 @@ Codex 官方多 agent 工作流优先把探索、测试、分诊、总结等读�
 
 ## 2. 编成
 
-- 默认先用 `spawn_agent` 拆分独立的探索、测试、分诊、总结和校验工作；普通任务只有在子代理满员后，且确实需要长期上下文、用户可见跟进或隔离写入时才编排会话。独立评审始终单独编排会话。
-- 需要会话时采用 **1 个审计会话 + N 个实现会话**。实现会话按 worktree 和写范围拆，不按"能开多少就开多少"。
-- 常用编成示例：读密集工作由多个子代理并行；写密集工作按互斥范围使用独立 worktree；最终由 1 个独立审计会话收口。
-- **审计**：只读评审、写 reviews 表；`pass` 的同一动作必须 `upsert_task` 把 `harness.db` 从 `evidence_ready` 改为 `passed`。不写业务代码、不自签 `passed`、不改实现者写范围。
-- **实现者**：一张卡做到 `evidence_ready` 即停，抄送审计。不得把自检写成独立评审。
-- **领袖 / 编排**：命名、派卡、保证写范围互斥、把审计结论收口到看板。自己不兼同一张卡的实现与审计。
+- sidecar 做测试执行、测试结果分析、日志收集、代码定位等独立辅助工作；不得擅自领下一张业务卡。
+- 左侧新聊天必须同时满足：用户明确要求、`spawn_agent` 已达到宿主容量上限、且有侧栏并行/长期上下文/隔离写入的实际需要；不满足任一条件不得创建。
+- 实现者到 evidence_ready 停手；原生 `/review` 只有满足原生审查等价契约时才能替代 Harness 最终独立评审，否则必须新的非 Fork 独立上下文，不用实现 sidecar 自签。
+- 审计只读材料与必要源码，输出 HARNESS_REVIEW；唯一获授权的控制库写入者核对来源、追加 review、运行语言门禁后更新状态。避免审计与领袖重复写库。
 
 ## 3. 创建与派卡
 
-启用 task-harness 后，独立读密集卡优先 `spawn_agent`。普通任务只有确认 `spawn_agent` 已满员，且仍需要侧边栏跟进、长期独立上下文或 worktree 隔离时，才使用 `create_thread`；独立评审直接使用新的独立会话。用户启用本技能即授权按此规则委托，不必另等「开新会话」指令。
+普通任务调用 `create_thread` 前先核对用户明确的新聊天请求、`spawn_agent` 容量已满及实际并行需求；独立审计只有原生 /review 不满足等价契约时才创建同样受此门槛约束的新会话。按原生路由 list_projects → Git/worktree 或非 Git/local → 最小初始 prompt → 核验 ID。用户指定直接使用保存项目时遵从。
 
-1. 子代理提示词只给一张小卡、必要输入、只读/写入范围、验证命令、停止条件和返回格式。
-2. Git 仓默认 worktree；若项目硬约束是共享同一目录，多个写入者必须互斥，不能同时操作 index 或提交。
-3. 创建或换卡后立刻 `set_thread_title` 为规范名。
-4. 会话派卡用 `send_message_to_thread`。对在途卡排队，不要打断。
-5. 每条会话派卡只给一张卡、写范围、验证命令、停手条件和结构化回报格式。
-6. 不要指定过期或非法 model 名；省略 model，让会话沿用当前宿主默认。
-7. 普通任务调用 `create_thread` 前，必须在派卡记录中说明 `spawn_agent` 已满员以及仍需会话的理由；没有容量证据就回到 `spawn_agent` 或当前会话串行。独立评审注明“独立上下文例外”。
+初始 prompt 已派卡，不立刻重复 send_message_to_thread。clientThreadId 仅表示工作区准备中；正式 threadId 就绪后才使用消息/等待工具。不指定 model/thinking，除非用户明确要求。失败或超时先查询是否已经创建，不能盲目重复。
 
 ## 4. 写范围与提交
 
-共享 checkout 时，并行会话的写范围必须互斥。提交前核暂存清单逐字等于写范围，提交内他线文件为 0。
-
-一卡一 commit。逐条 `git add`；禁止 `git add .` / `-A` / `-u`。项目另有还原/提交禁令时从其规定。
+多写入者需独立 worktree 或已证明互斥的写集；不能共享 index/提交动作。任务回报携带 source revision、dirty diff 或提交摘要、changed files、worktree、验证记录。提交与合并遵循用户授权，不把“回报完成”当自动 cherry-pick。独立 worktree 不自动拥有命名 branch，Fork 也不自动创建 Git branch。
 
 ## 5. 子代理还是会话
 
-| 用 `create_thread` 会话 | 用 `spawn_agent` |
-|---|---|
-| `spawn_agent` 已满员后，用户要在侧边栏看见、要跟、要长期线 | 探索、测试、分诊、总结、日志分析、依赖图、格式校验、快速查询 |
-| 独立评审 / 审计（独立上下文例外） | 当前会话不依赖结果即可继续的并行小卡 |
-| `spawn_agent` 已满员后，写密集任务需要独立 worktree 或独立上下文 | 无共享状态的读密集工作 |
-
-- 评审必须独立上下文：用另一个会话。不要让实现者 spawn 子代理后自签 `passed`。
-- 写密集工作只有在具备独立 worktree 或严格互斥写范围时才委托；同一工作区内不能并发写或并发提交。
-- 测试代码的编写属于写密集工作；测试执行、结果分析和日志收集属于读密集工作，优先 `spawn_agent`。
-- 子代理 `fork_context` 默认 false，只喂该卡所需材料。
-- 子代理完成后由编排会话核对写范围与证据，再决定是否抄送审计。`spawn_agent` 结果用 `wait_agent` 收取；不要用 `wait_threads` 代替它。
+| 需求 | 选择 | 边界 |
+|---|---|---|
+| 当前卡的独立读密集辅助工作 | spawn_agent | 主线继续非重叠工作，结果核验后关闭 |
+| 当前卡的写密集辅助工作 | 隔离后子代理或主线串行 | 无互斥写集就不并行 |
+| 用户明确要求且 spawn_agent 已满 | create_thread | 还必须存在侧栏并行、长期上下文或隔离写入的实际需要 |
+| 用户要求从当前历史分支 | fork_thread | 不能用于最终独立审计 |
+| 最终完成评审 | 等价原生 /review，或显式授权后新的非 Fork 审计任务 | 原生回执不等价时不得替换；缺授权/上下文则记录阻塞 |
 
 ## 6. 异步回报契约（create_thread 模式）
 
-**场景**: 普通任务已确认 `spawn_agent` 满员，且需要长期可见会话或隔离写入；独立评审走独立上下文例外。主线派发后继续推进，各会话完成后主动通知主线。
+派卡提示词包含 task_id、项目/canonical DB、工作区、输入基线、写范围、验证命令、停止条件及回报要求。回报最少：
 
-**回报格式**（实现会话完成后发送给主线）:
-
-```
-【卡片 {task_id} 交付】状态: {status}, 文件: {changed_files}, evidence: {ev_id}, 提交: {commit_hash}
-```
-
-**字段说明**:
-- `{task_id}`: 任务 ID（如 `FE-6`、`BE-7`、`TEST-8`）
-- `{status}`: `evidence_ready`（等待评审）或 `blocked`（阻塞）
-- `{changed_files}`: 变更文件列表（如 `src/api/users.ts, tests/users.test.ts`）
-- `{ev_id}`: evidence 表中的证据 ID（如 `ev-fe-6-001`）
-- `{commit_hash}`: Git commit 短哈希（如 `a1b2c3d`，若未提交则省略）
-
-**示例回报消息**:
-
-```
-【卡片 FE-6 交付】状态: evidence_ready, 文件: src/components/UserList.vue, evidence: ev-fe-6-001, 提交: a1b2c3d
-
-验证命令: npm run test:unit -- UserList.spec.ts
-退出码: 0
-测试通过: 12/12
-
-请审计会话评审。
+```text
+【卡片 {task_id} 交付】状态: {status}, 文件: {changed_files}, evidence: {ev_id}, 提交: {commit_hash_or_uncommitted}
+工作区: {absolute_workspace}; 基线: {source_revision}; 限制: {limitations}
+HARNESS_STATUS: {task_id} IN_PROGRESS
+EXIT_SIGNAL: false
 ```
 
-**主线收到回报后的处理**:
-1. 用 `append_progress` 记录回报；
-2. 检查是否所有派发的卡都已回报；
-3. 若全部回报且状态为 `evidence_ready`，创建审计会话或发送评审请求；
-4. 若有 `blocked`，记录阻塞原因并决定下一步。
-
-**等待与交接**: `wait_threads` 可以等待指定会话、等待会话进入需要关注状态，或收集多个会话最终结果；这是合法的必要动作，不是禁用项。让子会话完成后通过 `send_message_to_thread` 或用户界面的"由 ChatGPT 从另一项任务发送"通知主线；`wait_threads` 只返回状态/结果，不会自动把提交动作、合并、cherry-pick 或 DB 回写交给主线。
-
-**侧栏会话完成后的主线责任**: 会话完成不会自动执行提交交接。主线必须主动读取回报，核对 `commit_hash`、changed files、worktree、diff 和 evidence；再按仓库策略决定保留独立 worktree、cherry-pick 或 merge，重新运行必要验证，并用 `append_evidence`、`append_progress`、`upsert_task` 回写 `.harness/harness.db`。只有独立评审通过后，主线才可置为 `passed`。
+会话不会自动把提交动作、合并、cherry-pick 或 DB 回写交给主线。主线从 wait_threads/read_thread 获取实际结果，核对后才 append_evidence/append_progress/upsert_task；不要依赖子任务一定会主动跨会话发消息。集成后重新验证，原 worktree 的 pass 不等于集成通过。
 
 ## 7. 完成、看板、失败重建
 
-看板读的是本机 `harness.db`，不是聊天摘要。审计在对话里宣布 pass 但没 `upsert_task`，看板就不会变。
+实现交卷到 evidence_ready 不是 COMPLETE；独立审计按 completion-review.md 输出契约。主线核验材料一致、追加 append_review，通过门禁后才能 passed。看板和宿主 UI 不能替代 DB。
 
-- 实现者输出 `HARNESS_STATUS: evidence_ready`，抄送审计，停手。
-- 审计输出 `HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>`，并 `append_review` + `upsert_task` 回写 `harness.db`。
-- `passed` 只能由独立评审写入。
-
-`Upstream rejected` / `systemError`：不要死磕旧会话。新建 → 旧会话标题加 `归档_` → 停派旧会话。同一张未完成卡不得同时交给两条活会话。
+会话出错时先确认在途状态/工作区是否仍被占用，保存 checkpoint。需要重建时重新检查新聊天授权；结果不明不盲目重派。用户要求归档才调用 set_thread_archived，重命名加“归档_”不是实际归档或停止执行回执。
 
 ## 8. 子代理同步委托（spawn_agent 模式）
 
-**场景**: 主线需要把独立、读密集的工作并行移出当前上下文，以减少上下文污染并尽快获得摘要。
-
-**适用**:
-- 探索（代码路径、依赖、接口和历史）
-- 测试执行、测试结果分析、日志收集
-- 分诊、规格评审、`harness.db` snapshot 检查
-- 依赖图分析（检查是否有环、生成拓扑排序）
-- 格式校验（snapshot / 中文契约）
-- 总结和快速查询（Git 日志、文件列表、环境变量）
-
-**改用会话**:
-- 编写业务代码、迁移或测试文件，除非有独立 worktree 或已证明写范围互斥；
-- 用户要在侧边栏跟进或任务需要长期独立上下文；
-- 独立评审（必须用新的 `create_thread` 上下文）。
-
-**用法**:
-```python
-# 主线推进任务前，用子代理检查依赖图
-dep_analysis = spawn_agent(
-    message="分析 .harness/harness.db 的依赖图，检查是否有环，返回拓扑排序结果"
-)
-
-if dep_analysis.has_cycle:
-    return "blocked: 依赖图有环，无法推进"
-
-# 主线继续推进任务
-```
-
-**关键**: 子代理不承担独立评审，不直接把任务置为 `passed`。主线必须核对其摘要、实际文件和可重放证据。子代理结果是硬门槛时，用 `wait_agent` 收取指定代理；`wait_threads` 仅用于 `create_thread` 会话，不与 `wait_agent` 混用。
+每项写清输入、只读/写入范围、验证命令和返回摘要。仅下一步依赖结果时 wait_agent；完成后核对实际产物，close_agent。测试可能写缓存/制品或占端口，也要隔离；测试文件编写属于写密集工作。子代理结果不能替代新的非 Fork 最终独立 review。
 
 ## 9. 红线
 
-- 一轮里顺手做下一张卡。
-- 审计写业务，或实现者自签 `passed`。
-- 标题带空格 / 中点 / 括号长句，导致无法一眼看出角色、版本、卡号。
-- 把官方已兼容的运行时约束重新开成 `blocked`。
-- 照抄其它会话的状态摘要，不核 `harness.db`。
-- 在没有已创建会话时调用 `wait_threads`，或把它当作无条件轮询；应按依赖等待指定会话、使用主动回报，并在需要时收集会话集合。
-- 让实现者 spawn 子代理后自签 `passed`（评审必须独立会话）。
+不能因满员或评审需求自动创建用户侧栏聊天；未满员也不得创建左侧新聊天。不能将 Fork、实现 sidecar 或同轮自检作为最终审计；原生 /review 仅在等价契约成立时例外替代。不能把 clientThreadId 当正式 ID；不能让一张未完成卡同时交给两条活实现线；不能把未知回执写成 passed、停止成功或释放写锁。主会话没有左侧并行新会话时不得星标。
 
 ## 中文交付门禁
 
-派卡、进度与交付理由使用中文原字段；任务 ID、会话 ID、命令、提交标识保持原文。每个实现会话交付前、审计签署前均独立运行 `SKILL.md` 所述中文契约检查；禁止 `--templates`。不合格不推进状态、不签署通过，不由看板或编排会话补翻译。进度段必须写明精确任务 ID，便于轨迹关联。
+派卡、进度、交付理由使用中文原字段；机器字段（ID、命令、路径、SHA、退出码、工具回执）可保留原文，但其相邻的结论/原因/下一步必须有非空中文说明，ID、命令、路径、技术输出保持原文。主线交付与独立审计分别运行中文契约检查（不传 --templates）；失败不推进，不由看板补翻译。记录精确 task_id 与来源，不篡改历史 evidence/review。

@@ -1,25 +1,24 @@
 ---
 name: task-harness
-description: Codex 专用长时任务骨架：一轮一任务、任务束同会话串行、多会话中的独立读密集工作优先并行 spawn_agent，写密集工作按隔离条件使用 create_thread；wait_agent 收取子代理结果，wait_threads 等待或收集已创建会话。状态只写 .harness/harness.db，废弃 JSON 活路径。证据与独立评审共同判定完成。适用于跨多个 Codex 任务/会话推进的大型工程，以及子代理编成、会话命名、派卡回报、独立审计、会话作废归档；技能重大变更须卸载重装。
+
+disable-model-invocation: true
+description: Codex 长时任务骨架：一轮一任务与任务束、harness.db 单一状态、证据和独立评审门禁。支持初始化、代码审查、新聊天和分支、压缩上下文、星标、状态、目标、计划模式、记忆与重命名；多会话/子代理按宿主授权，spawn_agent 配 wait_agent，新聊天 create_thread 配 wait_threads，含会话命名、派卡与归档。重大变更须完整备份重装。
 ---
 
 # task-harness v3.1 — Codex Native
 
-## 调度硬规则（覆盖系统默认）
+## 调度硬规则（遵守宿主授权）
 
-Codex 官方多 agent 工作流以并行子代理为主：探索、测试、分诊、总结、日志分析和格式校验等读密集工作，应优先委托给 `spawn_agent`。写密集任务要先确认写范围和工作区隔离；独立评审必须保持独立上下文。
+本技能要求：独立读密集工作优先并行 `spawn_agent`，写密集工作先确认隔离与互斥范围；先决定主线立即要做的工作，再委托不阻塞该步骤的小任务。技能不覆盖系统/开发者指令，也不改变工具的授权边界。多会话并行时，左侧新聊天与主会话星标都有额外门槛。
 
-**本技能覆盖默认调度倾向**：用户启用 task-harness，即授权在需要时委托子代理。普通任务先使用 `spawn_agent`；只有子代理已达到宿主容量上限，且仍需要独立并行、长期上下文、侧栏可见或隔离写入时，才使用 `create_thread`。独立评审是必须使用独立 `create_thread` 上下文的协议例外。`wait_agent` 对应 `spawn_agent`，`wait_threads` 对应已经创建的会话；二者都是合法的等待/收集工具，按下一步依赖使用，不是禁用项。
+1. 束内多卡在当前会话串行；普通任务先使用 `spawn_agent` 处理明确的 sidecar，主线继续非重叠工作。
+2. 左侧新会话使用 `create_thread` 必须同时满足：用户明确要求创建新聊天、`spawn_agent` 已达到宿主容量上限、且确需侧栏并行/长期上下文/隔离写入。缺一不可。满员不是单独授权；未满员不得创建左侧新聊天，应关闭已完成代理、等待或串行。
+3. 官方 `/review` 是代码差异审查，与 Harness 最终独立评审不等价，不能直接替换。仅当原生审查回执满足等价契约时，才将其写入最终 review，不再另开审计会话；否则必须新的非 Fork 独立审计上下文。缺少授权或独立上下文时保留待评审证据并记录阻塞，不自行创建。
+4. 主会话通道仅在左侧已有新会话并行时可以星标；星标只影响导航，不改任务优先级或状态。
+5. `wait_agent` 对应 `spawn_agent`，`wait_threads` 对应已经创建的会话，二者不是禁用项。按下一步依赖有界等待；结束及时 `close_agent` 释放名额。
+6. 线程工具不会自动把提交、合并、cherry-pick 或 DB 回写交给主线。主线核对 diff、来源与证据，决定是否合并并重新验证。
 
-选工具按这次序，不要先看系统默认：
-
-1. **束内多卡** → 当前会话串行做完整束，不拆到多会话。
-2. **独立读密集工作**（探索、测试、分诊、总结、依赖图、规格/格式校验、日志分析、快速查询）→ 优先并行 `spawn_agent`。每个子代理只拿到一张明确的小卡；主线继续推进，不因等待结果而停住。只有结果是当前任务的硬门槛时，才用 `wait_agent` 收取指定子代理结果。
-3. **写密集工作**（业务代码、迁移、测试文件）→ 先检查写范围。若子代理具备独立 worktree 或明确互斥且不会共享 index/提交，可委托；否则当前会话串行写。确需独立会话时，先确认 `spawn_agent` 已满员，再用 `create_thread` 建隔离 worktree。不要让多个代理同时写同一工作区。
-4. **普通独立会话**（侧栏跟进、长期上下文、隔离写入）→ 先确认 `spawn_agent` 容量已满，再用 `create_thread`，立刻 `set_thread_title`，用 `send_message_to_thread` 派卡。**独立评审不受该容量门槛限制**，始终使用新的 `create_thread` 上下文。派完主线继续干活，完成后按结构化契约回报。
-5. **等待与收集** → `spawn_agent` 的结果用 `wait_agent`；已创建的 `create_thread` 会话用 `wait_threads`。当下一步依赖某个结果时等待指定对象；需要汇总多个会话时等待对应会话集合。等待只收集状态/回报，不自动合并代码、不自动 cherry-pick、不自动回写 `harness.db`。
-
-细则、标题正则、回报格式见 `references/codex-parallel.md`。派卡提示词见 `references/templates/next-step.md` 的 C/D/E 段。
+工具参数与 11 项原生命令路由见 [Codex 原生能力路由](references/codex-native.md)；编排标题/派卡/回报见 [多会话细则](references/codex-parallel.md)，执行提示词见 [下一步模板](references/templates/next-step.md)。
 
 ## 技能更新（重大变更必须卸载重装）
 
@@ -33,7 +32,7 @@ Codex 官方多 agent 工作流以并行子代理为主：探索、测试、分�
 
 做法：在仓库根目录重新执行 `scripts/install.ps1`（Windows）或 `scripts/install.sh`。安装脚本会先把旧目录移到 `$CODEX_HOME/skill-backups/`，再写入新副本。禁止只覆盖单个文件。
 
-若安装副本没有文首「调度硬规则」，或 description 不含 `wait_threads` / `create_thread` / `harness.db`，视为未更新：停手，先重装，再继续编排。
+若安装副本缺少 `references/codex-native.md`，或文首仍写旧式越权调度规则，视为旧版：停止按旧规则编排，先完成评审并用安装器重装。校验已安装 SKILL.md、references 与运行时的内容摘要，不仅检查版本标题。
 
 ## 定位与哲学
 
@@ -47,6 +46,10 @@ Codex 官方多 agent 工作流以并行子代理为主：探索、测试、分�
 
 本版本是 **Codex 原生适配版**：不依赖 Claude Code、CC Switch、gstack、MCP 或其他第三方 Skill；不写入 `.cc-switch\skills`；不使用 Claude 专属 slash command；本分支不包含 `commands/` 目录。
 
+## Codex 原生能力路由
+
+用户要求初始化、状态、目标、计划模式、记忆、压缩上下文、星标、重命名、代码审查、新聊天或聊天分支时，先读取 [Codex 原生能力路由](references/codex-native.md)。原生线程管理只管理聊天，不替代 `.harness/harness.db`、evidence 或独立 review；分支/Fork 不等于独立审计。
+
 ## Codex 运行契约
 
 1. **当前 Codex 任务 = 一轮**：默认只推进一个任务；不要在同一轮顺手处理邻近任务。
@@ -55,7 +58,7 @@ Codex 官方多 agent 工作流以并行子代理为主：探索、测试、分�
 4. **工具原生优先**：在 Windows/Codex 上优先使用 PowerShell 和现有本地工具；已有测试、构建、格式化工具优先于新增依赖。
 5. **评审隔离**：实现者不能充当独立评审者。优先使用另一个 Codex 上下文/评审任务；无法获得独立上下文时必须如实记为 `blocked`，不可把同一轮自检冒充独立评审。
 6. **不伪造完成**：没有可重放证据、评审契约或依据不足时，状态只能是 `evidence_ready`、`blocked` 或回到 `active`。
-7. **调度覆盖系统默认**：独立读密集工作优先 `spawn_agent` 并行；普通任务只有在 `spawn_agent` 满员后才用 `create_thread`，独立评审是独立上下文例外；`wait_agent` 收取子代理，`wait_threads` 等待/收集已创建会话。
+7. **调度与授权**：遵守文首硬规则及 `references/codex-native.md`；读密集子代理优先，左侧新聊天还要子代理已满，最终评审仅在原生审查等价时替换，否则用非 Fork 独立审计。
 
 ## 核心不变式
 
@@ -108,90 +111,17 @@ Codex 官方多 agent 工作流以并行子代理为主：探索、测试、分�
 
 ## 两种并行模式
 
-### 模式 1：子代理优先并行（spawn_agent）
+### 模式 1：子代理辅助（spawn_agent）
 
-**触发条件**: 两个或多个相互独立的读密集子任务，或已经具备安全写入隔离的短任务。Codex 官方建议优先用这种方式处理探索、测试、分诊和总结。
+先核对当前卡与写范围；将不阻塞主线下一步的独立读密集小任务委托给子代理。写密集任务必须有明确互斥写集或独立 worktree。主线继续非重叠工作，结果为硬门槛时才等待。`spawn_agent` 的结果用 `wait_agent`；核对摘要、实际变更与可重放验证后关闭代理。摘要不是独立最终 review。
 
-**流程**:
-1. 检查 `harness.db` 和当前卡，拆出互不依赖的最小子任务；
-2. 并行调用 `spawn_agent`，每个提示词写清输入、只读/写入范围、验证命令和返回格式；
-3. 主线继续推进不依赖这些结果的工作；
-4. 结果是硬门槛时，用 `wait_agent` 收取指定结果；否则让子代理完成并返回摘要，不把原始日志全部倒回主线；
-5. 主线核对结果、证据和实际变更，再决定是否更新 `harness.db` 或送独立评审。
+### 模式 2：用户要求的新聊天（create_thread）
 
-**子代理返回格式**（详见 `references/codex-parallel.md`）:
-```
-【子代理 {sidecar_id} 返回】状态: {status}, 结论: {summary}, 文件: {changed_files}, 证据: {evidence}
-```
-
-**关键**: `spawn_agent` 是首选并行手段，但不等于放宽证据门禁。子代理的摘要不能替代主线对 DB、文件变更和可重放验证的核对，也不能充当独立评审。
-
-**示例**:
-```
-当前任务：看板回归
-  ├─ spawn_agent：检查 SQLite snapshot
-  ├─ spawn_agent：运行前端逻辑测试
-  └─ 主线：核对变更范围与中文契约
-  ↓ 收取摘要并合并证据
-独立评审会话：确认是否可置为 passed
-```
-
-### 模式 2：独立会话异步派卡（create_thread，特殊路径）
-
-**触发条件**: 普通任务必须先确认 `spawn_agent` 已满员，且确实需要侧栏跟进、长期独立上下文或隔离 worktree；独立评审是唯一的协议强制例外，可直接创建新的独立上下文。仅仅因为任务可以并行、用户喜欢多会话或任务是测试，不足以直接调用 `create_thread`。
-
-**流程**:
-1. 领袖会话检查 `harness.db`，识别可独立推进的任务或束，并确认 worktree/写范围隔离；
-2. 普通任务先检查 `spawn_agent` 是否有可用容量；只有已满员且需求仍成立时，才用 `create_thread`。独立评审直接走独立上下文例外；
-3. 用 `create_thread` 创建会话，立刻按 `references/codex-parallel.md` 命名；
-4. 用 `send_message_to_thread` 派卡，提示词包含一张卡、写范围、验证命令、停止条件和回报格式；
-5. 主线继续推进不依赖该会话的工作；需要知道会话状态或结果时，用 `wait_threads` 等待/收集指定会话，不把它当作代码交接；
-6. 会话完成后主动向主线发送结构化回报。侧栏会话不会自动把提交、合并、cherry-pick 或 DB 回写动作交给主线程；主线必须读取回报，核对 `commit_hash`、changed files、worktree 和证据，决定是否合并并重新验证，再用 `append_evidence`、`append_progress`、`upsert_task` 回写 `harness.db`。
-
-**适用场景**:
-- 规格评审（需要立即知道 snapshot 任务是否合理）
-- 依赖图分析（检查是否有环）
-- 格式校验（snapshot / 中文契约）
-- 快速查询（Git 日志、文件列表）
-
-**写入门槛**:
-- 同一工作区内不允许多个代理同时写、同时操作 index 或同时提交；
-- 有独立 worktree 时才把写密集任务并行派给独立会话；
-- 只有读密集测试、测试结果分析或日志分析时，测试工作优先 `spawn_agent`；
-- 独立评审始终使用新的 `create_thread` 上下文，不能由实现者的子代理自签；这是 `create_thread` 绕过容量门槛的协议例外。
-
-**示例**:
-```python
-# 主线推进 bundle-user-api
-def execute_bundle():
-    # 1. 用子代理检查依赖图
-    dep_check = spawn_agent("分析 harness.db 依赖图，检查是否有环")
-    if dep_check.has_cycle:
-        return "blocked: 依赖图有环"
-    
-    # 2. 主线继续推进 t-backend-01
-    implement_backend()
-    
-    # 3. 用子代理验证 API 可用性
-    api_check = spawn_agent("curl http://localhost:3000/api/users，验证返回 200")
-    if api_check.status != 200:
-        return "blocked: API 未启动"
-    
-    # 4. 主线继续推进 t-test-01
-    implement_tests()
-```
+先按原生路由检查明确授权与 `list_projects`，再选 worktree/local。创建的初始 prompt 包含当前卡、工作区、写范围、验证命令、停止条件与回报格式；不要重复发送同一派卡。已创建的 `create_thread` 会话用 `wait_threads`，创建尚在排队时不能把 clientThreadId 当 threadId。
 
 ## 多会话并行（Codex 专属）
 
-以文首「调度硬规则」为准。并行不等于一轮多任务。并行 = 多个 Codex 任务/会话（或 sidecar 子代理），每个仍只持一张卡。
-
-1. 先定编成：读密集拆分优先用 N 个 `spawn_agent`；普通任务只有在子代理满员且确有长期线或隔离写入需求时，才使用会话；独立评审使用独立审计会话。审计不写业务、不自签 `passed`。
-2. 创建或换卡后立刻按 `references/codex-parallel.md` 命名；作废先改 `归档_` 再停派。
-3. 子代理和会话都必须一张卡一个范围；共享 checkout 时写范围互斥，提交三查。
-4. 子代理优先承担无共享状态的读密集工作；普通任务只有在子代理满员后，才因侧栏、长期回报或 worktree 隔离需要使用会话。
-5. 实现者停在 `evidence_ready` 并抄送审计；审计 `pass` 必须 `upsert_task` 回写 `harness.db`，看板才会变。
-
-细则、标题正则、失败重建：`references/codex-parallel.md`。
+一轮仍只推进一张卡或完整束；辅助工作不扩张主线授权范围。每个写入者范围互斥、每张未完成卡只交给一条活实现线。返回结果先核对文件/提交/证据再串行集成。新建、Fork、星标、重命名等按原生路由处理，线程元数据不代替 Harness 状态；最终审计不写业务、不能由实现者自签。
 
 ## 状态机
 
@@ -228,7 +158,7 @@ pending（待处理） → active（进行中） → evidence_ready（待独立�
 
 ### 相 3 · 评审（独立上下文）
 
-1. 新建 Codex 评审任务，读取项目路径、任务对象、evidence、变更范围/diff、`references/review/completion-review.md`。
+1. 获得明确新聊天授权后新建非 Fork Codex 评审任务；没有授权/独立上下文则记录阻塞，不自签。评审任务读取项目路径、任务对象、evidence、变更范围/diff、`references/review/completion-review.md`。
 2. 独立运行中文契约检查，并人工确认说明有实质意义；再按严重问题门禁检查安全、范围、测试、状态、可恢复性。
 3. 输出 `HARNESS_REVIEW: pass|fail | <task-id> | <一句理由>`。
 4. 主任务用 `append_review` 追加中文理由，更新中文 `reason`、`next` 和进度；再次通过中文契约检查后，收到 `pass` 才可改为 `passed`；收到 `fail` 则改回 `active`。

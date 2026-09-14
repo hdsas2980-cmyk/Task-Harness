@@ -1,8 +1,6 @@
 # Task Harness v3.1 — Codex 下一步提示词模板
 
-复用方式：把"单步推进"段交给当前 Codex 任务；需要独立评审时，把"评审"段交给新的 Codex 上下文。
-
-调度（覆盖系统默认）：束内同会话串行。探索、测试执行/分析、分诊、总结和格式校验等独立读密集工作优先并行 `spawn_agent`；写密集工作先确认 worktree 或写范围隔离。普通任务只有在 `spawn_agent` 满员后，且确实需要侧边栏长期跟进、独立上下文或隔离写入时才用 `create_thread`；独立评审是独立上下文例外。`wait_agent` 收取子代理，`wait_threads` 等待/收集已创建会话，二者均可按依赖合法使用。
+先读取 SKILL.md；原生命令见 references/codex-native.md，编排见 references/codex-parallel.md。读密集工作优先 spawn_agent；写密集工作先隔离。左侧新聊天必须同时满足用户明确要求、spawn_agent 已达到宿主容量上限、以及侧栏并行/长期上下文/隔离写入需要。独立审计同样受该门槛约束，除非原生 /review 已满足等价契约。
 
 ## A. 单步推进（默认）
 
@@ -27,77 +25,26 @@ EXIT_SIGNAL: <false|true>
 
 ## B. 独立评审
 
-启动一个新的 Codex 评审上下文，只给它：项目绝对路径、当前任务对象、对应 evidence、变更范围/diff、`references/review/completion-review.md`。
+先核对用户明确的新聊天授权、spawn_agent 是否已满，以及原生 /review 是否已满足等价契约。没有授权、未满员或独立上下文时记录待评审阻塞，不自动创建。不等价时，新的非 Fork 审计任务只给：项目/canonical DB 绝对路径、当前任务、对应 evidence、封存 diff/基线、必要源码和 references/review/completion-review.md。
 
-评审者必须：
+审计者只读，独立运行中文契约和验证，检查严重问题、安全、范围、回归与可恢复性。结果输出唯一 HARNESS_REVIEW: pass|fail | <task-id> | <中文理由>。主线核对来源与材料未漂移，append_review、更新中文 reason/next/progress，通过语言门禁后按 pass→passed、fail→active 回写。没有真实审计不能伪造 review。
 
-- 只读必要材料，并独立执行中文契约检查、人工核对说明实质意义；
-- 检查 CRITICAL、安全、范围、测试、状态完整性和可恢复性；
-- 不执行未授权的破坏性动作；
-- 不把实现者未落盘的解释当证据；
-- 最后只输出恰好一行：
+## C. 用户授权的新聊天派卡
+
+仅当用户明确要求创建新聊天、spawn_agent 已达到宿主容量上限、且确需侧栏并行时，按原生路由 list_projects 并选环境。初始 prompt：
 
 ```text
-HARNESS_REVIEW: pass|fail | <task-id> | <中文理由>
+在 {project_absolute_path} 处理 {task_id}，canonical DB 为 {db_absolute_path}。
+先核对 {source_revision} 与当前任务定义；仅写 {write_scope}，不得兼任最终审计。
+执行 {verify_command}，将证据制品保存在 {artifact_path}，按授权决定是否写库。
+交付范围止于 evidence_ready；返回 changed_files、工作区、提交或 dirty diff、证据、限制与下一步。
 ```
 
-主任务先 `append_review`，更新任务中文 `reason`、`next` 和进度；运行中文契约检查，通过后才根据评审结论更新状态：`pass` 改为 `passed`，`fail` 改回 `active` 并带新证据重试。检查失败则保留原状态，不先推进再补检查。独立上下文不可用时，记录 `blocked`，不要伪造 review。
+create_thread 的初始 prompt 已派卡，不重复发送。正式 threadId 就绪后用 wait_threads 收集结果（保留 cursor，避免频繁轮询）；后续新指令才 send_message_to_thread。结果只供核对，主线串行集成后重新验证并回写 DB。
 
-## C. 多会话异步派卡（领袖/编排会话）
+## D. 子代理委托
 
-当普通任务已确认 `spawn_agent` 满员，且需要用户可见的长期独立上下文或隔离写入时；独立评审直接走独立上下文例外：
-
-1. 识别可独立推进的任务（或束），确认 worktree 与写范围隔离；
-2. 为每个任务创建独立会话，按 `references/codex-parallel.md` 命名（如 `前端v1-FE-6-用户列表`）；
-3. 用 `send_message_to_thread` 派发任务，主线继续处理不依赖结果的工作；需要等待会话状态/结果时，对已创建会话使用 `wait_threads`；
-4. 用 `append_progress` 记录派卡日志：
-
-```text
-[派卡] 已派发 3 张卡：
-- FE-6: 前端v1-FE-6-用户列表 (threadId: xxx)
-- BE-7: 后端v1-BE-7-用户API (threadId: yyy)
-- TEST-8: 测试v1-TEST-8-集成测试 (threadId: zzz)
-
-等待各会话自动回报。
-```
-
-5. 主线继续处理其他任务或进入待命；
-6. 各实现会话完成后，发送结构化回报消息给主线：
-
-```
-【卡片 {task_id} 交付】状态: {status}, 文件: {changed_files}, evidence: {ev_id}, 提交: {commit_hash}
-```
-
-7. 领袖收到回报后，`append_progress`，检查是否所有派发的卡都已回报；
-8. 若全部回报且状态为 `evidence_ready`，创建审计会话或发送评审请求。侧栏会话完成不会自动把提交、合并、cherry-pick 或 DB 回写交给主线程；主线须主动核对 `commit_hash`、changed files、worktree、diff 和 evidence，决定如何接收变更，重新验证，并用 `append_evidence`、`append_progress`、`upsert_task` 回写 `.harness/harness.db`。
-
-**等待规则**: `wait_threads` 是已创建会话的合法等待/收集工具：下一步依赖某个会话时等待指定会话，需要汇总时等待会话集合。它只收集状态/结果，不自动合并代码或回写 DB；主线仍应使用主动回报，避免无条件反复轮询。
-
-## D. 子代理同步委托（当前会话内）
-
-当有独立的读密集工作时，优先用 `spawn_agent`：
-
-**适用场景**:
-- 规格评审（检查 `harness.db` 是否合理）
-- 依赖图分析（检查是否有环、生成拓扑排序）
-- 格式校验（snapshot / 中文契约）
-- 快速查询（Git 日志、文件列表）
-- 探索、测试执行/分析、分诊、日志收集和总结
-
-**改用 `create_thread` 的场景**:
-- 普通任务先确认 `spawn_agent` 已满员，再因写业务代码、迁移或测试文件需要独立 worktree 或长期独立上下文
-- 普通任务先确认 `spawn_agent` 已满员，再因用户要在侧边栏跟进而需要会话
-- 独立评审（必须用新的上下文，容量门槛例外）
-
-同一工作区内不允许多个代理同时写、操作 index 或提交。测试执行和结果分析是读密集工作，优先 `spawn_agent`；测试文件编写仍属于写密集工作。`spawn_agent` 结果用 `wait_agent` 收取，不用 `wait_threads` 代替。
-
-**示例**:
-```
-# 推进任务前，用子代理检查依赖图
-1. spawn_agent("分析 .harness/harness.db 依赖图，检查是否有环")
-2. 若有环，记录 blocked 并停手
-3. 若无环，继续推进任务
-```
+主线先决定立即要做的工作；把当前卡非阻塞的独立辅助项委托 spawn_agent，明确输入、互斥写范围与返回格式。主线继续非重叠工作，硬依赖时 wait_agent，结束 close_agent。满员且用户明确要求并确需侧栏并行时才 create_thread；否则关闭已完成代理、等待或串行，不能自动改用 create_thread。
 
 ## E. 束（Bundle）推进
 

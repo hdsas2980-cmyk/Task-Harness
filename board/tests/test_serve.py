@@ -9,8 +9,13 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parent
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+from harness_db import HarnessDB
 spec = importlib.util.spec_from_file_location("board_serve", ROOT / "serve.py")
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
@@ -217,6 +222,29 @@ class BoardServeTests(unittest.TestCase):
         self.last_file.write_text(str(harness) + "\n", encoding="utf-8")
         chosen = mod.choose_project(None, prompt=False)
         self.assertEqual(chosen, harness)
+
+    def test_snapshot_prefers_harness_db_over_leftover_progress(self):
+        source = self.tasks.parent
+        leftover = "\n".join(["Task finished. Waiting for review."] * 20)
+        leftover = leftover + "\n" + "\n".join(["English leftover line"] * 8)
+        (source / "progress.txt").write_text(leftover, encoding="utf-8")
+        with HarnessDB(source / "harness.db", create=True) as db:
+            db.set_meta("project", "测试项目")
+            db.set_meta("description", "验证看板读库")
+            db.upsert_task({
+                "id": "a",
+                "name": "实现任务",
+                "desc": "实现验证",
+                "reason": "暂无阻塞",
+                "next": "执行验证",
+                "status": "active",
+            })
+            db.append_progress("## 2026-09-14 | a | 执行\n- 进展：数据库进度已写入")
+        _, body = fetch(self.base + "/api/snapshot")
+        result = json.loads(body.decode("utf-8"))
+        self.assertEqual(result["contract"]["errors"], [])
+        self.assertIn("数据库进度已写入", result["files"]["progress.txt"])
+        self.assertNotIn("English leftover line", result["files"]["progress.txt"])
 
     def test_start_ps1_is_ascii(self):
         raw = (ROOT / "start.ps1").read_bytes()

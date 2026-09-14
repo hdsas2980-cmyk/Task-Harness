@@ -19,8 +19,20 @@ STATES = {"pending", "active", "evidence_ready", "passed", "blocked", "regressed
 CJK = re.compile(r"[\u3400-\u9fff]")
 PLACEHOLDER = re.compile(r"\{\{.*?\}\}|^<[^>]+>$")
 PROTOCOL = re.compile(r"(?:HARNESS_STATUS: \S+ (?:IN_PROGRESS|COMPLETE|BLOCKED)|PROGRESS: \d+/\d+|EXIT_SIGNAL: (?:false|true))$")
+MACHINE_PROGRESS = re.compile(
+    r"^(?:TASK_ID|EVENT_ID|AGENT_ID|THREAD_ID|CLIENT_THREAD_ID|HOST_ID|SESSION_ID|"
+    r"REV|SHA-?256|SHA|COMMIT|CMD|PATH|FILE|URL|WORKDIR|BASELINE|SOURCE_REVISION|"
+    r"EXIT_CODE|EXIT|NATIVE_RECEIPT)\s*[:：]\s*\S+",
+    re.I,
+)
+MACHINE_LINE = re.compile(r"^(?:[0-9a-fA-F]{7,64}|https?://\S+|[A-Za-z]:\\[^\s]+|/(?:[^\s/]+/)*[^\s/]+)$")
+REVIEW_LINE = re.compile(r"^HARNESS_REVIEW:\s*(pass|fail)\s*\|\s*(\S+)\s*\|\s*(.*)$", re.I)
 PROSE_LABELS = {"目标", "技术栈", "进展", "状态", "原因", "下一步", "验证结论", "评审结论", "规格评审结论"}
 
+
+def _snippet(value) -> str:
+    text = " ".join(str(value or "").split())
+    return text[:80] if text else "<empty>"
 
 
 def _payloads(rows):
@@ -58,14 +70,57 @@ def validate_snapshot(snapshot: dict, *, templates: bool = False, extra_files: d
         files.update(extra_files)
     return validate_files(files, templates=templates)
 
-def validate_files(files: dict[str, str], *, templates: bool = False) -> dict:
-    """供命令行和只读看板共用；files 为文件名到 UTF-8 文本的映射。"""
+
+def validate_progress_fragment(text: str, *, templates: bool = False) -> list[str]:
+    files = {
+        "tasks.json": json.dumps({"project": "写入门禁", "description": "仅校验进度片段", "tasks": []}, ensure_ascii=False),
+        "evidence.jsonl": "",
+        "reviews.jsonl": "",
+        "progress.txt": text or "",
+    }
+    result = validate_files(files, templates=templates, require_progress_narrative=False)
+    return [error for error in result["errors"] if error.startswith("progress.txt")]
+
+
+def validate_task_payload(task: dict, *, templates: bool = False) -> list[str]:
+    files = {
+        "tasks.json": json.dumps({"project": "写入门禁", "description": "仅校验任务字段", "tasks": [task]}, ensure_ascii=False),
+        "evidence.jsonl": "",
+        "reviews.jsonl": "",
+        "progress.txt": "## 2026-01-01 | write-gate | 执行\n- 进展：占位",
+    }
+    result = validate_files(files, templates=templates)
+    return [error for error in result["errors"] if error.startswith("tasks.json.tasks[0]")]
+
+
+def validate_record_payload(kind: str, row: dict, *, templates: bool = False) -> list[str]:
+    encoded = json.dumps(row, ensure_ascii=False)
+    files = {
+        "tasks.json": json.dumps({"project": "写入门禁", "description": "仅校验记录字段", "tasks": []}, ensure_ascii=False),
+        "evidence.jsonl": encoded if kind == "evidence" else "",
+        "reviews.jsonl": encoded if kind == "reviews" else "",
+        "progress.txt": "## 2026-01-01 | write-gate | 执行\n- 进展：占位",
+    }
+    result = validate_files(files, templates=templates)
+    prefix = "evidence.jsonl" if kind == "evidence" else "reviews.jsonl"
+    return [error for error in result["errors"] if error.startswith(prefix)]
+
+
+def raise_language_errors(errors: list[str]) -> None:
+    if errors:
+        raise ValueError("中文契约失败：\n" + "\n".join(errors))
+
+
+def validate_files(files: dict[str, str], *, templates: bool = False, require_progress_narrative: bool = True) -> dict:
+    """供命令行、只读看板和写入门禁共用；files 为文件名到 UTF-8 文本的映射。"""
     errors: list[str] = []
     counts = {"tasks": 0, "evidence": 0, "reviews": 0}
 
     def prose(value, location):
         if not isinstance(value, str) or not value.strip() or not CJK.search(value):
-            errors.append(f"{location}：必须是非空中文说明字符串（机器标识可保留原文）")
+            errors.append(
+                f"{location}：必须是非空中文说明字符串；ID、命令、路径、SHA、退出码等机器字段可保留原文，但结论/原因/下一步必须写中文（摘录：{_snippet(value)}）"
+            )
         elif not templates and PLACEHOLDER.search(value.strip()):
             errors.append(f"{location}：必须替换模板占位符")
 
@@ -173,6 +228,13 @@ def validate_files(files: dict[str, str], *, templates: bool = False) -> dict:
             continue
         if fence or not line or re.fullmatch(r"[-=*_\s]+", line) or PROTOCOL.fullmatch(line):
             continue
+        if MACHINE_PROGRESS.fullmatch(line) or MACHINE_LINE.fullmatch(line):
+            continue
+        review = REVIEW_LINE.fullmatch(line)
+        if review:
+            narrative += 1
+            prose(review.group(3).strip(), location)
+            continue
         narrative += 1
         content = re.sub(r"^[#*\-\s]+", "", line)
         pair = re.split(r"[：:]", content, maxsplit=1)
@@ -182,10 +244,9 @@ def validate_files(files: dict[str, str], *, templates: bool = False) -> dict:
             prose(content, location)
     if fence:
         errors.append("progress.txt：命令代码围栏未闭合")
-    if not narrative:
-        errors.append("progress.txt：必须包含中文进度叙事，不能只有机器输出或空白")
+    if require_progress_narrative and not narrative:
+        errors.append("progress.txt：必须包含至少一条非空中文进度叙事；机器回执只能使用协议行或明确机器前缀，不能替代中文结论/原因/下一步")
 
-    # 可选地图也只能是中文原字段；路径、编号、引用不改写。
     if "board.json" in files:
         board = parse(files["board.json"], "board.json")
         def map_prose(value, location):

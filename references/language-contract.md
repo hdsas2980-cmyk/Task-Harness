@@ -34,6 +34,8 @@
 
 每次追加使用 `## 时间 | task-id | 执行/评审/派卡` 标题，正文写中文进展、状态、验证/评审结论、下一步。任务 ID 必须精确，不能靠任务名称关联。
 
-命令和原始输出放独立代码围栏；协议 `HARNESS_STATUS`、`PROGRESS`、`EXIT_SIGNAL` 保持原样。围栏外是中文叙事，不用英文结论加一个中文标签代替。
+命令和原始输出放独立代码围栏；协议 `HARNESS_STATUS`、`PROGRESS`、`EXIT_SIGNAL` 保持原样。明确机器前缀行（如 `TASK_ID:`、`REV:`、`EXIT_CODE:`、`THREAD_ID:`）和纯哈希/路径/URL 可保留原文。围栏外的结论/原因/下一步必须是非空中文叙事，不用英文结论加一个中文标签代替。
+
+`HarnessDB.upsert_task` / `append_evidence` / `append_review` / `append_progress` 在写入时执行同一套中文契约；失败不落库。看板若发现 `harness.db`，校验数据库 snapshot，忽略 leftover JSON/TXT 活路径。
 
 看板轨迹跟随当前选中任务，仅聚合该 ID 的进度段、证据、评审；按实际时间展示，缺时间的记录标明未提供时间。不把当前状态推测成历史状态，不把验证成功认作独立评审通过。状态机阶段条不是完成百分比。

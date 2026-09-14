@@ -33,7 +33,7 @@ def resolve_source(project: Path, must_exist: bool = True) -> Path:
     if target.name == ".harness":
         return target
     nested = target / ".harness"
-    if (nested / "tasks.json").is_file() or not (target / "tasks.json").is_file():
+    if (nested / "harness.db").is_file() or (nested / "tasks.json").is_file() or not (target / "tasks.json").is_file():
         return nested
     return target
 

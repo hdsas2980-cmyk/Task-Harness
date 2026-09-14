@@ -18,6 +18,8 @@ from urllib.parse import unquote, urlparse
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+if (HERE / "harness_db.py").is_file() is False and str(HERE.parent) not in sys.path:
+    sys.path.insert(0, str(HERE.parent))
 
 from pick_dir import pick_directory_subprocess  # noqa: E402
 from sessions import list_session_catalog, resolve_source  # noqa: E402
@@ -87,24 +89,37 @@ def save_last_source(source: Path) -> None:
 def snapshot(source: Path | None) -> dict:
     files = {}
     read_errors = []
+    contract = None
     if source is not None:
-        for name in ("tasks.json", *OPTIONAL):
-            fp = source / name
-            if fp.is_file():
-                try:
-                    files[name] = fp.read_text(encoding="utf-8-sig")
-                except (OSError, UnicodeError) as exc:
-                    read_errors.append(f"{name}：无法读取 UTF-8 文件（{exc}）")
-    checked_files = dict(files)
-    # 只检测禁用文件是否存在，绝不读取翻译内容。
-    if source is not None and (source / "board.i18n.json").exists():
-        checked_files["board.i18n.json"] = ""
-    try:
-        contract = _language.validate_files(checked_files) if source is not None else None
-    except RecursionError:
-        contract = {"errors": ["任务文件嵌套过深，无法检查"], "counts": {}}
+        try:
+            from harness_db import HarnessDB, find_db_path
+            db_path = find_db_path(source)
+            if db_path is not None:
+                with HarnessDB(db_path, create=False) as db:
+                    live = db.read_snapshot()
+                files = _language.snapshot_to_files(live)
+                extra = {}
+                if (source / "board.i18n.json").exists() or (source.parent / "board.i18n.json").exists():
+                    extra["board.i18n.json"] = ""
+                contract = _language.validate_snapshot(live, extra_files=extra)
+            else:
+                for name in ("tasks.json", *OPTIONAL):
+                    fp = source / name
+                    if fp.is_file():
+                        try:
+                            files[name] = fp.read_text(encoding="utf-8-sig")
+                        except (OSError, UnicodeError) as exc:
+                            read_errors.append(f"{name}：无法读取 UTF-8 文件（{exc}）")
+                checked_files = dict(files)
+                if (source / "board.i18n.json").exists():
+                    checked_files["board.i18n.json"] = ""
+                contract = _language.validate_files(checked_files)
+        except RecursionError:
+            contract = {"errors": ["任务文件嵌套过深，无法检查"], "counts": {}}
+        except (OSError, UnicodeError, ValueError) as exc:
+            contract = {"errors": [f"无法读取任务数据：{exc}"], "counts": {}}
     if contract is not None:
-        contract["errors"] = read_errors + contract["errors"]
+        contract["errors"] = read_errors + list(contract.get("errors") or [])
     return {
         "source": str(source) if source is not None else None,
         "files": files,

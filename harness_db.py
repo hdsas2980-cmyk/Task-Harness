@@ -118,6 +118,27 @@ def _record_payload(row: Any) -> dict[str, Any]:
     return data
 
 
+
+_LANGUAGE_MOD = None
+
+def _language():
+    global _LANGUAGE_MOD
+    if _LANGUAGE_MOD is None:
+        import importlib.util
+        checker = Path(__file__).resolve().parent / "scripts" / "check_task_harness_language.py"
+        spec = importlib.util.spec_from_file_location("_task_harness_language_write", checker)
+        if spec is None or spec.loader is None:
+            raise ValueError("无法加载中文契约校验器: " + str(checker))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _LANGUAGE_MOD = module
+    return _LANGUAGE_MOD
+
+
+def _reject_language(errors):
+    if errors:
+        raise ValueError("中文契约失败：\n" + "\n".join(errors))
+
 def find_db_path(project_root: str | Path) -> Path | None:
     root = Path(project_root).expanduser()
     try:
@@ -230,6 +251,7 @@ class HarnessDB:
         if not task_id:
             raise ValueError(_TASK_ID)
         payload["id"] = task_id
+        _reject_language(_language().validate_task_payload(payload))
         with self._connection:
             self._connection.execute(
                 "INSERT INTO tasks(id, payload_json) VALUES(?, ?) "
@@ -249,6 +271,7 @@ class HarnessDB:
         row_id = str(payload.get("id") or "").strip() or _stable_id("evidence", payload)
         payload["id"] = row_id
         task_id = payload.get("task") or payload.get("task_id")
+        _reject_language(_language().validate_record_payload("evidence", payload))
         try:
             with self._connection:
                 self._connection.execute(
@@ -265,6 +288,7 @@ class HarnessDB:
         payload["id"] = row_id
         task_id = payload.get("task") or payload.get("task_id")
         evidence_id = payload.get("ev") or payload.get("evidence_id")
+        _reject_language(_language().validate_record_payload("reviews", payload))
         try:
             with self._connection:
                 self._connection.execute(
@@ -279,6 +303,7 @@ class HarnessDB:
         text = str(content or "").strip("\n")
         if not text.strip():
             raise ValueError(_PROGRESS_EMPTY)
+        _reject_language(_language().validate_progress_fragment(text))
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
         with self._connection:
             result = self._connection.execute(

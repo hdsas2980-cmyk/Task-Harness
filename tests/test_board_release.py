@@ -26,6 +26,7 @@ class BoardReleaseTests(unittest.TestCase):
                     self.assertEqual(hashlib.sha256(data).hexdigest(), sha)
                     self.assertEqual(data, archive.read("TaskBoard/" + name))
             self.assertEqual((bundle / "static/app.js").read_bytes(), (ROOT / "board/static/app.js").read_bytes())
+            self.assertEqual((bundle / "harness_db.py").read_bytes(), (ROOT / "harness_db.py").read_bytes())
             self.assertEqual((bundle / "scripts/check_task_harness_language.py").read_bytes(), (ROOT / "scripts/check_task_harness_language.py").read_bytes())
             for name in ("static/app.js", "static/index.html"):
                 text = (bundle / name).read_text(encoding="utf-8")

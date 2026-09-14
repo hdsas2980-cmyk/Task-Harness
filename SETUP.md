@@ -30,6 +30,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 3. 不安装 `commands/`、`board/`、开发测试或发布构建脚本；
 4. 不读取、不写入、不创建 `.cc-switch` 或 `.claude`。
 
+## Codex 原生能力
+
+初始化、状态、目标、计划模式、记忆、压缩上下文、星标、重命名、代码审查及新聊天/分支的路由与边界见 [references/codex-native.md](references/codex-native.md)。区分宿主模式与项目状态；纯查询、星标、重命名不要求写库，缺工具时如实报告。
+
 ## 项目初始化
 
 技能不再启动看板。唯一真相源是项目 `.harness/harness.db`。JSON/JSONL/TXT 不是活路径。

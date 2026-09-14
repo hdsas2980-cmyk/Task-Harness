@@ -472,7 +472,7 @@ async function refreshSessions(){
 function snapshotFiles(data){
   const files = data?.files;
   if(data?.contract?.errors?.length){
-    const message = '中文契约失败，请修复任务原文件：\n' + data.contract.errors.join('\n');
+    const message = '中文契约失败，请修复 harness.db 中的中文字段（不要改 leftover JSON/TXT）：\n' + data.contract.errors.join('\n');
     showEmpty('中文契约失败');
     const box = $('contract-error'); if(box){ box.hidden = false; box.textContent = message; }
     throw Error(message);

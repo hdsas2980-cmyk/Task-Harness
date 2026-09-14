@@ -15,6 +15,7 @@ ASSETS = {name: BOARD / name for name in (
 )}
 ASSETS["使用说明.txt"] = BOARD / "README.md"
 ASSETS["scripts/check_task_harness_language.py"] = ROOT / "scripts/check_task_harness_language.py"
+ASSETS["harness_db.py"] = ROOT / "harness_db.py"
 
 
 def build(output):

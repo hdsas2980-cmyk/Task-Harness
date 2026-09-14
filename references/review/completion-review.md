@@ -1,6 +1,6 @@
 # completion-review.md — Codex 完成评审（相 3）
 
-对一个状态为 `evidence_ready`、已经执行 `verify` 的任务做独立完成评审，产出 `pass` 或 `fail`。
+对一个状态为 `evidence_ready`、已经执行 `verify` 的任务做独立完成评审，产出 `pass` 或 `fail`。官方 `/review` 只审代码差异，逻辑能力与本协议不等价，不能直接替换；仅当原生审查回执已满足独立性、证据/验证、中文理由和 pass|fail 时，才可将其作为本评审写入。
 
 ## 铁律
 
