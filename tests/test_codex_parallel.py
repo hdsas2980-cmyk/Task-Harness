@@ -54,6 +54,10 @@ class CodexParallelDocTests(unittest.TestCase):
             self.assertIn(word, desc)
         self.assertIn("调度硬规则", skill)
         self.assertIn("卸载重装", skill)
+        self.assertIn("读密集工作优先并行", skill)
+        self.assertIn("`spawn_agent`", skill)
+        self.assertIn("wait_threads` 只作明确的结果收集屏障", skill)
+        self.assertIn("写密集工作", skill)
 
     def test_readme_points_to_parallel_reference(self):
         readme = README.read_text(encoding="utf-8")
@@ -80,6 +84,19 @@ class CodexParallelDocTests(unittest.TestCase):
         self.assertIn("spawn", text.lower())
         self.assertIn("## 0. 覆盖系统默认", text)
         self.assertNotIn("只在用户明确要求独立会话时", text)
+        self.assertIn("读密集工作优先 `spawn_agent`", text)
+        self.assertIn("测试执行、测试结果分析、日志收集", text)
+        self.assertIn("wait_threads` 只在确实需要汇总多个会话最终结果", text)
+
+    def test_dispatch_language_does_not_restore_session_first_rule(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        doc = DOC.read_text(encoding="utf-8")
+        template = (ROOT / "references" / "templates" / "next-step.md").read_text(encoding="utf-8")
+        for text in (skill, doc, template):
+            self.assertIn("spawn_agent", text)
+            self.assertIn("写密集", text)
+            self.assertNotIn("测试（应该用 `create_thread`", text)
+            self.assertNotIn("`spawn_agent` 只做短 sidecar", text)
 
     def test_title_regex_accepts_canonical_names(self):
         pattern = title_re()
