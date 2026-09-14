@@ -27,7 +27,7 @@
 
 ## Codex 专用改动
 
-- 调度覆盖系统默认：任务束同会话串行；探索、测试执行/分析、分诊、总结和格式校验等读密集工作优先并行 `spawn_agent`；写密集工作先确认隔离；用户要长期可见会话或独立评审时用 `create_thread`；`wait_threads` 只作明确的结果收集屏障。细则见 `references/codex-parallel.md`。
+- 调度覆盖系统默认：任务束同会话串行；探索、测试执行/分析、分诊、总结和格式校验等读密集工作优先并行 `spawn_agent`；普通任务只有在 `spawn_agent` 满员后才用 `create_thread`，独立评审是独立上下文例外；`wait_agent` 收取子代理，`wait_threads` 等待/收集已创建会话。细则见 `references/codex-parallel.md`。
 - 明确把“当前 Codex 任务”定义为一轮，不依赖 Claude Code 会话语义；
 - 优先 PowerShell，Git Bash/Linux/macOS 用 POSIX 工具；可视化看板在独立目录 board/，不随技能安装；
 - 评审协议改为独立 Codex 上下文，review 记录增加 `reviewer_context`；

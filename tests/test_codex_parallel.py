@@ -56,7 +56,10 @@ class CodexParallelDocTests(unittest.TestCase):
         self.assertIn("卸载重装", skill)
         self.assertIn("读密集工作优先并行", skill)
         self.assertIn("`spawn_agent`", skill)
-        self.assertIn("wait_threads` 只作明确的结果收集屏障", skill)
+        self.assertIn("`wait_agent` 对应 `spawn_agent`", skill)
+        self.assertIn("`wait_threads` 对应已经创建的会话", skill)
+        self.assertIn("不是禁用项", skill)
+        self.assertIn("普通任务先使用 `spawn_agent`", skill)
         self.assertIn("写密集工作", skill)
 
     def test_readme_points_to_parallel_reference(self):
@@ -86,7 +89,11 @@ class CodexParallelDocTests(unittest.TestCase):
         self.assertNotIn("只在用户明确要求独立会话时", text)
         self.assertIn("读密集工作优先 `spawn_agent`", text)
         self.assertIn("测试执行、测试结果分析、日志收集", text)
-        self.assertIn("wait_threads` 只在确实需要汇总多个会话最终结果", text)
+        self.assertIn("`wait_agent` 收取 `spawn_agent` 结果", text)
+        self.assertIn("`wait_threads` 等待或收集已经创建的会话", text)
+        self.assertIn("普通任务调用 `create_thread` 前", text)
+        self.assertIn("不会自动把提交动作、合并、cherry-pick 或 DB 回写交给主线", text)
+        self.assertIn("append_evidence", text)
 
     def test_dispatch_language_does_not_restore_session_first_rule(self):
         skill = SKILL.read_text(encoding="utf-8")
@@ -97,6 +104,18 @@ class CodexParallelDocTests(unittest.TestCase):
             self.assertIn("写密集", text)
             self.assertNotIn("测试（应该用 `create_thread`", text)
             self.assertNotIn("`spawn_agent` 只做短 sidecar", text)
+
+    def test_wait_tools_and_thread_fallback_are_distinguished(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        doc = DOC.read_text(encoding="utf-8")
+        template = (ROOT / "references" / "templates" / "next-step.md").read_text(encoding="utf-8")
+        combined = "\n".join((skill, doc, template))
+        self.assertIn("`spawn_agent` 的结果用 `wait_agent`", skill)
+        self.assertIn("已创建的 `create_thread` 会话用 `wait_threads`", skill)
+        self.assertIn("普通任务只有在 `spawn_agent` 满员后", combined)
+        self.assertIn("独立评审是必须使用独立会话的协议例外", doc)
+        self.assertIn("不会自动把提交、合并、cherry-pick 或 DB 回写", combined)
+        self.assertIn("决定是否合并并重新验证", skill)
 
     def test_title_regex_accepts_canonical_names(self):
         pattern = title_re()
